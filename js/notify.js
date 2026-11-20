@@ -121,7 +121,7 @@
       // chat messages already alerted from the chat stream above
       if ((n.link || "").startsWith("#/app/chat/")) { const ch = decodeURIComponent(n.link.slice("#/app/chat/".length)); if (Data.list("chat").some(m => m.channel === ch && m.by === n.by && Math.abs((m.at || 0) - (n.at || 0)) < 15000)) return; }
       const who = n.by ? Data.person(n.by) : null;
-      alert({ title: strip(n.text).slice(0, 120), body: "", link: n.link || "", person: who, tag: "n-" + n.id,
+      alert({ title: strip(n.text).slice(0, 120), body: n.body || "", link: n.link || "", person: who, tag: "n-" + n.id,
         dedupe: (n.link || "").startsWith("#/app/chat/") ? "chat|" + decodeURIComponent(n.link.slice("#/app/chat/".length)) + "|" + n.by : "n-" + n.id });
     });
   }

@@ -116,7 +116,7 @@
         if (e.key !== "Enter" || !input.value.trim()) return;
         const text = input.value.trim(); input.value = "";
         Data.add("chat", { channel: ch, text, reactions: {} });
-        if (ch !== "general") { const other = ch.slice(3).split("|").find(k => k !== m); Data.notify(other, `💬 <b>${esc(me().name)}</b>: ${esc(text.slice(0, 80))}`, "#/app/chat/" + encodeURIComponent(ch)); }
+        if (ch !== "general") { const other = ch.slice(3).split("|").find(k => k !== m); Data.notify(other, `💬 <b>${esc(me().name)}</b> sent you a message`, "#/app/chat/" + encodeURIComponent(ch), text); }
       };
       // reading it here counts as read
       const rr = lastRead(); rr[ch] = Date.now(); localStorage.setItem(readKey(), JSON.stringify(rr)); dispatchEvent(new Event("lumen-chat-read"));

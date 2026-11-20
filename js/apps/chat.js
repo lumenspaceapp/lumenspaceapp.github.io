@@ -97,8 +97,8 @@
       Data.add("chat", { channel: active, text, reactions: {} });
       // @mentions and DMs notify people
       const me = Data.me();
-      if (active.startsWith("dm:")) { const other = active.slice(3).split("|").find(k => k !== me.key); other && Data.notify(other, `💬 <b>${esc(me.name)}</b>: ${esc(text.slice(0, 80))}`, "#/app/chat/" + encodeURIComponent(active)); }
-      Data.people().forEach(p => { const handle = p.name.split(" ")[0].toLowerCase(); if (p.key !== me.key && text.toLowerCase().includes("@" + handle)) Data.notify(p.key, `<b>${esc(me.name)}</b> mentioned you in ${esc(title(active).name)}`, "#/app/chat/" + encodeURIComponent(active)); });
+      if (active.startsWith("dm:")) { const other = active.slice(3).split("|").find(k => k !== me.key); other && Data.notify(other, `💬 <b>${esc(me.name)}</b> sent you a message`, "#/app/chat/" + encodeURIComponent(active), text); }
+      Data.people().forEach(p => { const handle = p.name.split(" ")[0].toLowerCase(); if (p.key !== me.key && text.toLowerCase().includes("@" + handle)) Data.notify(p.key, `<b>${esc(me.name)}</b> mentioned you in ${esc(title(active).name)}`, "#/app/chat/" + encodeURIComponent(active), text); });
     }
     function react(m, em) {
       const me = Data.me().key, r = { ...(m.reactions || {}) }, who = new Set(r[em] || []);

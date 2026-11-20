@@ -113,7 +113,7 @@
       window.Cloud?.here?.(); window.Cloud?.renderAccount?.();
       if (me) dispatchEvent(new HashChangeEvent("hashchange")); // re-render the current view with the new avatar
     },
-    notify(to, text, link) { if (!to || to === Data.me().key) return; Data.add("notifications", { to, text, link: link || "", read: false }); },
+    notify(to, text, link, body) { if (!to || to === Data.me().key) return; Data.add("notifications", { to, text, link: link || "", read: false, ...(body ? { body: String(body).slice(0, 300) } : {}) }); },
   };
   const clean = o => JSON.parse(JSON.stringify(o));
   const err = e => { console.error(e); UI.toast("Couldn't save: " + (e.code || e.message)); };

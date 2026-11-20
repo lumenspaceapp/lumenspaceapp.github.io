@@ -108,7 +108,7 @@
       offs.forEach(f => f());
       offs = [
         Data.on("notifications", all => { const me = Data.me().key; mine = all.filter(x => x.to === me).sort((a, b) => b.at - a.at); count(); }),
-        Data.on("chat", count), Data.on("tasks", count), Data.on("channels", count),
+        Data.on("chat", count), Data.on("tasks", count), Data.on("channels", count), Data.on("feed", () => { if (box?.isConnected) fill(); }),
       ];
     };
     addEventListener("lumen-chat-read", count);
@@ -123,6 +123,15 @@
       try { localStorage.setItem(readKey(), JSON.stringify(r)); } catch {}
       dispatchEvent(new Event("lumen-chat-read"));
     }
+    // older notifications have no preview saved: find the comment they were about
+    function preview(n) {
+      if (n.body) return n.body;
+      if (!/commented on/.test(n.text || "")) return "";
+      const near = c => c && c.by === n.by && Math.abs((c.at || 0) - (n.at || 0)) < 20000;
+      const col = (n.link || "").startsWith("#/app/tasks/") ? Data.list("tasks").filter(t => "#/app/tasks/" + t.id === n.link) : Data.list("feed");
+      for (const item of col) { const c = (item.comments || []).find(near); if (c) return c.text; }
+      return "";
+    }
     function fill() {
       const go = link => { UI.closePops(); if (link) location.hash = link; };
       const attn = todo.map(x => h("div", { class: "mi notif attn" + (x.late ? " late" : ""), role: "button", tabindex: 0, onclick: () => go(x.link), onkeydown: e => { if (e.key === "Enter") go(x.link); } },
@@ -130,7 +139,7 @@
         h("span", { class: "nt" }, h("span", { class: "nt-t", text: x.title }), h("small", { text: x.sub })),
         x.kind === "task" ? h("button", { class: "nt-done", title: "Mark done", "aria-label": "Mark task done", html: "✓", onclick: e => { e.stopPropagation(); Data.update("tasks", x.id, { status: "done", completedAt: Date.now() }); UI.toast("✅ Task done"); } }) : null));
       const recent = mine.slice(0, 20).map(n => h("button", { class: "mi notif" + (n.read ? "" : " unread"), onclick: () => { Data.update("notifications", n.id, { read: true }); go(n.link); } },
-        avatar(Data.person(n.by), 26), h("span", { class: "nt" }, h("span", { html: n.text }), h("small", { text: UI.timeAgo(n.at) }))));
+        avatar(Data.person(n.by), 26), h("span", { class: "nt" }, h("span", { html: n.text }), preview(n) ? h("span", { class: "nt-body", text: preview(n) }) : null, h("small", { text: UI.timeAgo(n.at) }))));
       const anyUnread = mine.some(n => !n.read) || todo.some(x => x.kind === "chat");
       box.replaceChildren(
         h("div", { class: "menu-sec", style: { display: "flex", justifyContent: "space-between" } }, "Notifications",

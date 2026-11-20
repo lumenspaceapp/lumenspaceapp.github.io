@@ -24,7 +24,7 @@
     ], { assignee: Data.me().key, status: "todo", ...preset }, { ok: "Create task" });
     if (!v) return;
     const id = await Data.add("tasks", { ...v, status: v.status || "todo", checklist: [], comments: [] });
-    if (v.assignee) Data.notify(v.assignee, `<b>${esc(Data.me().name)}</b> assigned you a task: “${esc(v.title)}”`, "#/app/tasks/" + id);
+    if (v.assignee) Data.notify(v.assignee, `<b>${esc(Data.me().name)}</b> assigned you a task: “${esc(v.title)}”`, "#/app/tasks/" + id, [v.deadline ? "Due " + Apps.fmtDate(v.deadline) : "", v.desc || ""].filter(Boolean).join(" · "));
     UI.toast("✅ Task created");
     return id;
   }
@@ -58,8 +58,9 @@
       newItem.classList.add("cl-new");
       const comment = h("textarea", { class: "menu-input f-ta", rows: 2, placeholder: "Write a comment… (Enter to send)" });
       comment.onkeydown = e => { if (e.key === "Enter" && !e.shiftKey && comment.value.trim()) { e.preventDefault();
-        set({ comments: [...(t.comments || []), { by: me.key, text: comment.value.trim(), at: Date.now() }] }, true);
-        [t.assignee, t.by].filter(k => k && k !== me.key).forEach(k => Data.notify(k, `<b>${esc(me.name)}</b> commented on “${esc(t.title)}”`, "#/app/tasks/" + id)); } };
+        const text = comment.value.trim(); comment.value = "";
+        set({ comments: [...(t.comments || []), { by: me.key, text, at: Date.now() }] }, true);
+        [...new Set([t.assignee, t.by])].filter(k => k && k !== me.key).forEach(k => Data.notify(k, `💬 <b>${esc(me.name)}</b> commented on “${esc(t.title)}”`, "#/app/tasks/" + id, text)); } };
       body.replaceChildren(title,
         h("div", { class: "td-meta" }, "Created by ", Apps.avatar(Data.person(t.by), 18), " ", Data.person(t.by).name, " · ", UI.timeAgo(t.at)),
         statusSel,

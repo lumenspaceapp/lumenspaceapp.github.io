@@ -32,11 +32,11 @@
       } else if (kind === "thanks") {
         if (!thanksTo) return UI.toast("Choose who you're thanking");
         await Data.add("feed", { kind, text: t || "Thank you!", to: thanksTo, likes: [], comments: [] });
-        Data.notify(thanksTo, `🏅 <b>${esc(me.name)}</b> thanked you on the feed`, "#/app/feed");
+        Data.notify(thanksTo, `🏅 <b>${esc(me.name)}</b> thanked you on the feed`, "#/app/feed", t || "Thank you!");
       } else {
         if (!t) return text.focus();
         await Data.add("feed", { kind, text: t, likes: [], comments: [], pinned: kind === "announce" });
-        if (kind === "announce") Data.people().forEach(p => Data.notify(p.key, `📣 <b>${esc(me.name)}</b> posted an announcement`, "#/app/feed"));
+        if (kind === "announce") Data.people().forEach(p => Data.notify(p.key, `📣 <b>${esc(me.name)}</b> posted an announcement`, "#/app/feed", t));
       }
       text.value = ""; UI.toast("Published");
     }
@@ -95,7 +95,7 @@
         e.preventDefault();
         const text = cin.value.trim(); cin.value = ""; // clear first: saving redraws the post straight away
         Data.arr("feed", p.id, "comments", { by: me, text, at: Date.now() });
-        if (p.by !== me) Data.notify(p.by, `<b>${esc(Data.me().name)}</b> commented on your post`, "#/app/feed");
+        if (p.by !== me) Data.notify(p.by, `💬 <b>${esc(Data.me().name)}</b> commented on your post`, "#/app/feed", text);
       };
       return h("article", { class: "feed-post glass" + (p.kind === "announce" ? " announce" : ""), style: { animationDelay: Math.min(i * 40, 300) + "ms" } },
         h("div", { class: "fp-head" }, Apps.avatar(author, 38), h("div", { class: "grow" }, h("b", { text: author.name }), h("div", { class: "app-sub", text: UI.timeAgo(p.at) + (p.kind === "poll" ? " · Poll" : "") })),
