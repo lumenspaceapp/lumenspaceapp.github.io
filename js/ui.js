@@ -12,6 +12,7 @@
       else if (k === "style" && typeof v === "object") for (const [sk, sv] of Object.entries(v)) sk.startsWith("--") ? el.style.setProperty(sk, sv) : (el.style[sk] = sv);
       else if (k.startsWith("on")) el.addEventListener(k.slice(2).toLowerCase(), v);
       else if (k === "dataset") Object.assign(el.dataset, v);
+      else if (k === "draggable") el.setAttribute(k, v ? "true" : "false"); // must be the string "true"; "" means not draggable
       else el.setAttribute(k, v === true ? "" : v);
     }
     for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid.nodeType ? kid : document.createTextNode(kid));

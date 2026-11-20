@@ -111,3 +111,14 @@
 }
 .chat-menu { display: none !important; }
 @media (max-width: 760px) { .chat-menu { display: inline-grid !important; } }
+
+/* touch drag & drop */
+.touch-ghost { position: fixed !important; z-index: 9999; margin: 0 !important; pointer-events: none; opacity: .92; overflow: hidden;
+  border-radius: 12px; box-shadow: 0 24px 50px -12px rgba(30, 20, 80, .45), 0 0 0 2px var(--accent); background: var(--glass-strong);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); animation: none !important; transition: none !important; will-change: transform; }
+body.touch-dragging, body.touch-dragging * { -webkit-user-select: none; user-select: none; }
+@media (hover: none) {
+  [draggable="true"], .gutter .drag { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  [draggable="true"] [contenteditable="true"] { -webkit-user-select: text; user-select: text; }
+  .gutter .drag { touch-action: none; }
+}
