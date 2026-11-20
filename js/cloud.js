@@ -47,7 +47,11 @@ async function signIn() {
   if (!Cloud.configured) return setupModal();
   if (!auth) return UI.toast("Still loading, try again in a second");
   try { await fb.signInWithPopup(auth, new fb.GoogleAuthProvider()); UI.toast("Signed in as " + auth.currentUser.email); return true; }
-  catch (e) { if (e.code !== "auth/popup-closed-by-user") UI.toast("Sign-in failed: " + (e.code || e.message)); return false; }
+  catch (e) {
+    if (e.code === "auth/popup-blocked") { UI.toast("Pop-up blocked, switching to full-page sign-in…"); await fb.signInWithRedirect(auth, new fb.GoogleAuthProvider()); return false; }
+    if (e.code !== "auth/popup-closed-by-user" && e.code !== "auth/cancelled-popup-request") UI.toast("Sign-in failed: " + (e.code || e.message));
+    return false;
+  }
 }
 async function signOutNow() { if (Cloud.ws) leave(true); await fb.signOut(auth); UI.toast("Signed out"); }
 
