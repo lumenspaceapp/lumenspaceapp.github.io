@@ -42,7 +42,10 @@
     refreshCrumbs() {
       const bc = document.getElementById("breadcrumbs"); bc.innerHTML = "";
       const p = Store.page(App.currentId);
-      if (!p) { bc.append(h("span", { class: "crumb", text: App.currentId === "home" ? "🏠 Home" : "" })); return; }
+      if (!p) {
+        const app = String(App.currentId || "").startsWith("app:") && window.Apps?.reg[App.currentId.slice(4)];
+        bc.append(h("span", { class: "crumb", text: app ? app.icon + " " + app.title : App.currentId === "home" ? "🏠 Home" : "" })); return;
+      }
       const chain = [...Store.ancestors(p.id), p];
       const show = chain.length > 3 ? [chain[0], null, ...chain.slice(-2)] : chain;
       show.forEach((c, i) => {
@@ -71,6 +74,8 @@
     bootLocal() { if (!App.booted) boot(); },
     onWorkspaceChange(pageId) {
       App.booted = true;
+      window.Data?.reset(); window.Data?.syncMe(); window.Apps?.rewatch?.();
+      if (!pageId && location.hash.startsWith("#/app/")) { applySettings(); App.currentId = null; return route(); }
       const target = pageId && Store.page(pageId) ? pageId : (Store.state.recent?.[0] && Store.page(Store.state.recent[0]) ? Store.state.recent[0] : "home");
       if (location.hash !== "#/p/" + target) history.replaceState(null, "", "#/p/" + target);
       applySettings(); App.currentId = null; route();
@@ -122,6 +127,14 @@
       }
       else history.replaceState(null, "", "#/p/home");
     }
+    const am = location.hash.match(/^#\/app\/([^/]+)(?:\/(.+))?$/);
+    if (am && window.Apps) {
+      App.currentId = "app:" + am[1]; document.body.classList.remove("show-outline");
+      document.getElementById("scroller").scrollTop = 0;
+      Apps.render(am[1], am[2]); Sidebar.render(); App.refreshCrumbs(); App.syncTopbar(); window.Cloud?.here?.();
+      return;
+    }
+    window.Apps?.leave();
     const m = location.hash.match(/^#\/p\/(.+)$/);
     let id = m ? decodeURIComponent(m[1]) : "home";
     const p = Store.page(id);
@@ -228,6 +241,7 @@
   }
 
   function boot() { App.booted = true; applySettings(); App.currentId = null; route(); }
+  window.Apps?.init();
 
   bindShell();
   if (innerWidth < 760) S().sbOpen = false;

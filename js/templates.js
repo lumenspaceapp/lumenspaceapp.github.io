@@ -3,7 +3,7 @@
   const B = (type, text = "", extra = {}) => Store.block(type, text, extra);
   const uid = () => Store.uid();
   const TAGC = ["gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red"];
-  const day = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+  const day = n => { const d = new Date(); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
   const cover = i => Store.COVERS[i % Store.COVERS.length];
 
   function page(title, icon, blocks, i = 0) {

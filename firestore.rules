@@ -24,6 +24,11 @@ service cloud.firestore {
       match /pages/{page} {
         allow read, write: if isMember(ws);
       }
+      // business apps (tasks, chat, CRM, …): any member can read and write
+      match /{coll}/{docId} {
+        allow read, write: if isMember(ws) && coll in ['tasks', 'projects', 'chat', 'channels', 'feed', 'events', 'leads', 'deals',
+          'contacts', 'companies', 'people', 'absences', 'timelog', 'files', 'folders', 'rules', 'notifications'];
+      }
       match /presence/{uid} {
         allow read: if isMember(ws);
         allow write: if isMember(ws) && uid == request.auth.uid;

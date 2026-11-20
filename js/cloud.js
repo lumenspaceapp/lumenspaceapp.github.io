@@ -381,6 +381,7 @@ Cloud.share = async anchor => {
   UI.menu(anchor, items, { align: "end" });
 };
 Cloud.signIn = signIn;
+Cloud.fs = { get fb() { return fb; }, get db() { return db; }, ref: () => wsRef };
 Cloud.createFrom = (name, state, icon) => create(name, state, icon);
 Cloud.open = open;
 Cloud.linkFor = id => `${location.href.split("#")[0]}#/ws/${Cloud.ws.id}/p/${id}`;
