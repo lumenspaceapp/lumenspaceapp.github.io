@@ -1,0 +1,13 @@
+name = "lumi-ai"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# Sites allowed to call the AI (comma-separated)
+ALLOWED_ORIGINS = "https://lumenspaceapp.github.io,http://127.0.0.1:5174,http://localhost:5174"
+# Only users signed in to this Firebase project can use it
+FIREBASE_PROJECT_ID = "lumen-notes-cde2c"
+
+# The Anthropic API key is NOT stored here. Set it as a secret:
+#   npx wrangler secret put ANTHROPIC_API_KEY

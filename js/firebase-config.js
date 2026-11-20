@@ -9,3 +9,7 @@ window.FIREBASE_CONFIG = {
   messagingSenderId: "152931493861",
   appId: "1:152931493861:web:aa1f92a0c89fc99e3fb10c",
 };
+
+/* Lumi AI: address of the Cloudflare Worker in worker/ (e.g. "https://lumi-ai.<you>.workers.dev").
+   Leave empty to use the built-in help guide only. */
+window.LUMI_AI_URL = "";

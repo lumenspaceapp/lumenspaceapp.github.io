@@ -90,14 +90,80 @@
   }
   function push(m) { log.push(m); save(); if (panel) { panel.stream.append(bubble(m, true)); scroll(); } }
   const scroll = () => requestAnimationFrame(() => { panel.stream.scrollTop = panel.stream.scrollHeight; });
+  const showTyping = () => {
+    typingEl?.remove();
+    typingEl = h("div", { class: "lumi-msg bot in" }, h("img", { class: "lumi-av", src: "assets/logo.svg", alt: "" }), h("div", { class: "lumi-bubble lumi-typing" }, h("i"), h("i"), h("i")));
+    panel.stream.append(typingEl); scroll();
+  };
   function ask(q, forceCheck) {
     if (!q.trim()) return;
     push({ from: "me", text: q });
     if (!panel) return;
-    typingEl?.remove();
-    typingEl = h("div", { class: "lumi-msg bot in" }, h("img", { class: "lumi-av", src: "assets/logo.svg", alt: "" }), h("div", { class: "lumi-bubble lumi-typing" }, h("i"), h("i"), h("i")));
-    panel.stream.append(typingEl); scroll();
+    showTyping();
+    if (!forceCheck && aiReady()) return aiAnswer(q);
     setTimeout(() => { typingEl?.remove(); typingEl = null; push({ from: "bot", ...answerFor(q, forceCheck) }); }, 450 + Math.random() * 350);
+  }
+
+  /* ---------- AI answers (Claude via the Lumi AI worker; see worker/) ---------- */
+  const aiReady = () => !!(window.LUMI_AI_URL && window.Cloud?.user && navigator.onLine);
+  const plain = html => { const d = document.createElement("div"); d.innerHTML = String(html || "").replace(/<br\s*\/?>/g, "\n"); return d.textContent; };
+  // the user's situation, so answers can be specific ("you're the only member…")
+  function appState() {
+    const C = window.Cloud, ws = C?.ws, cur = App.currentId || "";
+    const screen = cur.startsWith("app:") ? Apps.reg[cur.slice(4)]?.title + " app" : cur === "home" ? "Home dashboard" : (Store.page(cur)?.title ? `page "${Store.page(cur).title}"` : "a page");
+    return [
+      `Screen: ${screen}`,
+      `Signed in: ${C?.user ? "yes" : "no"}`,
+      ws ? `Workspace: shared "${ws.name}", ${(ws.members || []).length} member(s), user is ${ws.owner === C.user?.uid ? "the owner" : "not the owner"}` : "Workspace: private (only on this device)",
+      `Shared workspaces they belong to: ${(C?.workspaces || []).length}`,
+      `Teammates online now: ${(C?.people || []).filter(p => p.uid !== C?.user?.uid && p.at && Date.now() - p.at.toMillis() < 70000).length}`,
+      `Sync status: ${document.getElementById("savedState")?.textContent || "unknown"}`,
+      `Online: ${navigator.onLine ? "yes" : "no"}; device: ${matchMedia("(max-width: 760px)").matches ? "phone" : "computer"}; theme: ${document.documentElement.dataset.theme}`,
+    ].join("\n");
+  }
+  // light formatting: **bold**, lists, line breaks, and [[action:x]] buttons
+  function render(text) {
+    const acts = [...text.matchAll(/\[\[action:([a-z]+)\]\]/g)].map(m => m[1]).filter(a => ACTIONS[a]);
+    const html = esc(text.replace(/\[\[action:[a-z]*\]?\]?/g, "").trim())
+      .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
+      .replace(/^(\d+)\. (.*)$/gm, '<span class="lumi-li"><i>$1.</i> $2</span>')
+      .replace(/^[-•] (.*)$/gm, '<span class="lumi-li"><i>•</i> $1</span>')
+      .replace(/\n/g, "<br>").replace(/<\/span><br>/g, "</span>");
+    return { html, acts: [...new Set(acts)].slice(0, 2) };
+  }
+  async function aiAnswer(q) {
+    const history = log.slice(-13, -1).filter(m => m.text && !m.local).map(m => ({ role: m.from === "me" ? "user" : "assistant", content: plain(m.text) }));
+    const messages = [...history, { role: "user", content: q }];
+    const msg = { from: "bot", text: "", ai: true };
+    let el, out, text = "";
+    const start = () => { if (el) return; typingEl?.remove(); typingEl = null; el = bubble(msg, true); out = el.querySelector(".lumi-bubble > div"); out.classList.add("lumi-streaming"); panel?.stream.append(el); };
+    try {
+      const token = await Cloud.user.getIdToken();
+      const res = await fetch(window.LUMI_AI_URL.replace(/\/$/, "") + "/chat", {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({ messages, state: appState() }) });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        if (res.status === 429) { typingEl?.remove(); typingEl = null; return push({ from: "bot", text: esc(err.message || "You're asking very fast. Please wait a few minutes."), local: true }); }
+        throw new Error(err.error || res.status);
+      }
+      const reader = res.body.getReader(), dec = new TextDecoder();
+      for (;;) {
+        const { done, value } = await reader.read(); if (done) break;
+        text += dec.decode(value, { stream: true }); start();
+        out.innerHTML = render(text).html; scroll();
+      }
+      start();
+      const r = render(text || "Sorry, I didn't get an answer. Please try again.");
+      Object.assign(msg, { text: r.html, act: r.acts, ask: true });
+      el.replaceWith(bubble(msg, false));
+      log.push(msg); save(); scroll();
+    } catch (e) {
+      console.warn("Lumi AI unavailable, using the help guide", e);
+      el?.remove(); typingEl?.remove(); typingEl = null;
+      const a = answerFor(q);
+      push({ from: "bot", ...a, text: a.text + '<div class="lumi-note">AI is unavailable right now, so this is from the built-in guide.</div>', local: true });
+    }
   }
 
   /* ---------- widget ---------- */
@@ -107,7 +173,8 @@
     const input = h("input", { class: "lumi-input", placeholder: "Ask Lumi about anything…", maxlength: 300 });
     input.addEventListener("keydown", e => { if (e.key === "Enter") { ask(input.value); input.value = ""; } if (e.key === "Escape") close(); });
     const el = h("div", { class: "lumi glass-strong", role: "dialog", "aria-label": "Lumi help" },
-      h("header", { class: "lumi-head" }, h("img", { src: "assets/logo.svg", alt: "" }), h("div", { class: "grow" }, h("b", { text: "Lumi" }), h("small", { text: "Lumen help · answers instantly" })),
+      h("header", { class: "lumi-head" }, h("img", { src: "assets/logo.svg", alt: "" }), h("div", { class: "grow" }, h("b", null, "Lumi", aiReady() ? h("span", { class: "lumi-ai", text: "AI" }) : null),
+        h("small", { text: aiReady() ? "Ask anything, in your own words" : window.LUMI_AI_URL && !window.Cloud?.user ? "Help guide · sign in for AI answers" : "Lumen help · answers instantly" })),
         h("button", { class: "icon-btn", title: "Start over", text: "↺", onclick: () => { log = []; save(); stream.replaceChildren(); push(greet()); } }),
         h("button", { class: "icon-btn", title: "Close", html: UI.icon("x"), onclick: close })),
       stream,

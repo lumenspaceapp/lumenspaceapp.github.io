@@ -2,3 +2,6 @@
 .DS_Store
 Thumbs.db
 
+worker/node_modules/
+worker/.wrangler/
+worker/.dev.vars
