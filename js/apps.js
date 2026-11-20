@@ -12,7 +12,7 @@
     const v = document.getElementById("view");
     closeSliders();
     if (cleanup) { try { cleanup(); } catch {} cleanup = null; }
-    current = name;
+    current = name; document.body.dataset.app = name;
     v.innerHTML = "";
     const def = reg[name];
     if (!def) { v.append(h("div", { class: "big-empty" }, h("div", { text: "🧩" }), "Unknown app")); return; }
@@ -24,7 +24,7 @@
     document.title = def.title + " · Lumen";
     renderNav();
   };
-  Apps.leave = () => { closeSliders(); if (cleanup) { try { cleanup(); } catch {} cleanup = null; } current = null; renderNav(); };
+  Apps.leave = () => { closeSliders(); delete document.body.dataset.app; if (cleanup) { try { cleanup(); } catch {} cleanup = null; } current = null; renderNav(); };
   Apps.current = () => current;
 
   /* Posts, chats and tasks only reach people in the same workspace: say so when nobody else is here. */

@@ -14,7 +14,7 @@
   --bg: #e9ecf6;
   --ga: .52; /* panel opacity, set from Settings → Glass transparency */
   --glass: rgba(255, 255, 255, var(--ga));
-  --glass-strong: rgba(255, 255, 255, min(.95, calc(var(--ga) + .28)));
+  --glass-strong: rgba(255, 255, 255, clamp(.8, calc(var(--ga) + .28), .95)); /* menus & windows stay readable */
   --glass-border: rgba(255, 255, 255, .65);
   --line: rgba(20, 24, 40, .08);
   --text: #1d2130;
@@ -37,7 +37,7 @@
 :root[data-theme="dark"] {
   --bg: #090a12;
   --glass: rgba(24, 26, 38, var(--ga));
-  --glass-strong: rgba(30, 32, 46, min(.95, calc(var(--ga) + .31)));
+  --glass-strong: rgba(30, 32, 46, clamp(.84, calc(var(--ga) + .31), .96));
   --glass-border: rgba(255, 255, 255, .08);
   --line: rgba(255, 255, 255, .08);
   --text: #e7e8f0;

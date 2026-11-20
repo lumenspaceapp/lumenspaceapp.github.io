@@ -1,0 +1,135 @@
+/* Lumi's knowledge base: what Lumen can do and how to fix common problems.
+   k = keywords (weight 2 for the first few that define the topic), a = answer (HTML), act = action buttons, app = shown first on that app's screen */
+(function () {
+  const KB = [
+    // ---------- sharing & teammates ----------
+    { id: "not-seeing", t: "My teammate can't see my posts / tasks", k: ["see", "member", "post", "visible", "show", "task", "chat", "workspace", "same", "missing", "empty"],
+      a: "Posts, chats, tasks and CRM records are only shared <b>inside one workspace</b>. If a teammate can't see them, you're probably in different workspaces.<br><br>1. Check the name at the top-left of the sidebar on both screens; it must be the same shared workspace (👥).<br>2. The owner of that workspace opens <b>Share</b> and adds the teammate's email.<br>3. The teammate opens the workspace menu (click the workspace name) and picks it.", act: ["check", "invite", "switch"] },
+    { id: "invite", t: "Invite a teammate", k: ["invite", "member", "add", "share", "email", "join", "collaborate"],
+      a: "Open <b>Share</b> (top right) in a shared workspace, type their email and press <b>Enter</b>. Lumen emails them a one-click sign-in link (and you can also copy the link). Only the workspace <b>owner</b> can invite.", act: ["invite"] },
+    { id: "invite-email", t: "The invite email didn't arrive", k: ["email", "invite", "arrive", "receive", "spam", "mail", "link", "limit"],
+      a: "• Ask them to check <b>Spam / Promotions</b>; it comes from <i>noreply@lumen-notes-cde2c.firebaseapp.com</i> titled “Sign in to Lumen Notes”.<br>• The free plan sends at most <b>5 invite emails per day</b>. After that, use <b>Share → Copy invite link</b> and send it on WhatsApp or chat.<br>• They must sign in with the <b>exact email you invited</b>.<br>• Use the ✉️ button next to their name in Share to resend.", act: ["invite"] },
+    { id: "private-vs-shared", t: "Private vs shared workspace", k: ["private", "shared", "workspace", "difference", "local", "device", "switch"],
+      a: "<b>💻 Private workspace</b> lives only in this browser: nothing is shared or synced.<br><b>👥 Shared workspaces</b> are online: everyone you invite sees the same pages, tasks, chat and CRM live, on any device.<br>Switch between them from the workspace menu (click the name at the top-left of the sidebar).", act: ["switch", "newws"] },
+    { id: "create-ws", t: "Create a shared workspace", k: ["create", "new", "workspace", "shared", "team", "setup"],
+      a: "Sign in, then open the workspace menu (click the workspace name) → <b>Create a new workspace…</b>. A short setup asks how you'll use it and builds the right pages for you. To share your existing private pages, use <b>Share → Share with friends…</b> instead.", act: ["newws", "signin"] },
+    { id: "remove-member", t: "Remove someone from a workspace", k: ["remove", "member", "kick", "delete", "access", "revoke"],
+      a: "Owner only: open <b>Share</b> and press ✕ next to their email. They lose access right away.", act: ["invite"] },
+    { id: "owner", t: "Only the owner can invite", k: ["owner", "permission", "only", "admin", "can't", "invite"],
+      a: "Inviting and removing people is limited to the workspace owner (👑 in the Share list). Everyone else can still edit everything inside it.", act: ["invite"] },
+
+    // ---------- account ----------
+    { id: "signin", t: "I can't sign in", k: ["sign", "signin", "login", "google", "popup", "account", "log"],
+      a: "• Use a normal browser window (Chrome, Edge, Safari). Some in-app browsers block the Google pop-up.<br>• If a pop-up blocker appears, allow pop-ups for this site and try again.<br>• Make sure you're on <b>lumenspaceapp.github.io</b>.<br>• Invited by email? Open the link from that email and confirm the same address.", act: ["signin", "check"] },
+    { id: "signout", t: "Sign out or switch account", k: ["signout", "logout", "switch", "account", "another"],
+      a: "Click your name at the bottom of the sidebar → <b>Sign out</b>. Then sign in again with the other Google account.", act: [] },
+    { id: "avatar", t: "Change my avatar or name", k: ["avatar", "profile", "picture", "photo", "name", "icon", "change"],
+      a: "Open <b>Settings → Your profile → Change avatar</b> to pick from 14 avatars, your Google photo, or your initial. It shows on chat, tasks, comments and the team directory. Job title and department live in <b>Company & HR → Edit my profile</b>.", act: ["avatar", "settings"] },
+
+    // ---------- pages & editor ----------
+    { id: "new-page", t: "Create a page", k: ["page", "new", "create", "document", "doc", "note"],
+      a: "Click <b>+ New page</b> in the sidebar (or press <b>Ctrl Alt N</b>). Hover a page in the sidebar and press <b>+</b> to put a page inside it. A new page offers templates like To-do list, Meeting notes and Project board.", act: ["newpage", "templates"] },
+    { id: "slash", t: "Add blocks with /", k: ["block", "slash", "insert", "heading", "list", "todo", "toggle", "quote", "callout", "code", "divider"],
+      a: "Type <b>/</b> in any line to insert a block: headings, to-dos, toggles, callouts, code, images, tables, boards and more. Markdown works too: <code>#</code> heading, <code>-</code> bullet, <code>1.</code> numbered, <code>[]</code> to-do, <code>&gt;</code> toggle, <code>```</code> code, <code>**bold**</code>.", act: [] },
+    { id: "format", t: "Bold, colours and links", k: ["bold", "italic", "color", "colour", "highlight", "link", "format", "text"],
+      a: "Select text to open the formatting bar: <b>bold</b>, <i>italic</i>, underline, strike, inline code, link, text colour and highlight. Block colours are in the ⋮⋮ block menu → Color.", act: [] },
+    { id: "drag", t: "Move or reorder things", k: ["drag", "reorder", "move", "drop", "order", "arrange", "block", "mobile", "hold", "long", "card"],
+      a: "<b>Computer:</b> drag the ⋮⋮ handle beside a block, a board card, or a page in the sidebar (drop onto another page to nest it).<br><b>Phone:</b> press and hold a card or page until it lifts, then drag. For blocks, tap the block then drag its ⋮⋮ handle.<br>Blocks can also move with <b>Ctrl Shift ↑/↓</b>.", act: [] },
+    { id: "delete-page", t: "Delete or restore a page", k: ["delete", "trash", "restore", "undo", "recover", "deleted", "lost", "page"],
+      a: "Pages go to <b>Trash</b> first (bottom of the sidebar), where you can restore them or delete them forever. Deleted blocks show an <b>Undo</b> button for a few seconds.", act: ["trash"] },
+    { id: "favorite", t: "Favorites", k: ["favorite", "favourite", "star", "pin", "bookmark"],
+      a: "Click the ⭐ in the top bar of a page (or the page's ··· menu in the sidebar) to add it to Favorites at the top of the sidebar.", act: [] },
+    { id: "cover", t: "Cover, icon and page style", k: ["cover", "icon", "emoji", "font", "width", "lock", "style"],
+      a: "Hover the top of a page for <b>Add icon</b> / <b>Add cover</b>. The ··· menu (top right) has fonts, small text, full width, lock page, duplicate, export to Markdown and print.", act: [] },
+    { id: "database", t: "Tables, boards and galleries", k: ["database", "table", "board", "gallery", "property", "column", "kanban", "row"],
+      a: "Type <b>/table</b>, <b>/board</b> or <b>/gallery</b>. Click a column header to rename it or change its type (select, date, number, checkbox, progress…), <b>+</b> adds a property, and <b>Open</b> on a row shows its details panel.", act: [] },
+    { id: "images", t: "Images and files", k: ["image", "picture", "upload", "file", "size", "big", "photo", "pdf"],
+      a: "Use <b>/image</b> to upload or paste a link. In shared workspaces, uploads (and Drive files) are limited to about <b>700 KB</b> each on the free plan, so use a link for bigger files.", act: ["drive"] },
+    { id: "search", t: "Search everything", k: ["search", "find", "look", "where"],
+      a: "Press <b>Ctrl K</b> (or click Search in the sidebar) to search page titles and content and run commands like “Toggle dark mode”.", act: ["search"] },
+    { id: "export", t: "Export, backup and import", k: ["export", "backup", "import", "download", "markdown", "save", "pdf"],
+      a: "• One page: ··· → <b>Export as Markdown</b> or <b>Print / PDF</b>.<br>• Private workspace: <b>Settings → Backup → Export</b> (and Import on another device).<br>• Shared workspaces are saved online automatically.", act: ["settings"] },
+    { id: "shortcuts", t: "Keyboard shortcuts", k: ["shortcut", "keyboard", "keys", "hotkey"],
+      a: "<b>Ctrl K</b> search · <b>Ctrl Alt N</b> new page · <b>Ctrl \\</b> sidebar · <b>Ctrl Shift L</b> theme · <b>/</b> blocks · <b>Tab</b> indent · <b>Ctrl D</b> duplicate block · <b>Ctrl Shift ↑↓</b> move block · <b>Ctrl /</b> open Lumi.", act: [] },
+
+    // ---------- apps ----------
+    { id: "tasks", app: "tasks", t: "Tasks and projects", k: ["task", "assign", "deadline", "todo", "project", "checklist", "due"],
+      a: "Create a task with <b>+ New task</b>, pick the responsible person and deadline. Switch between List, Kanban and Deadlines views; open a task for its checklist and comments. The person you assign gets a notification 🔔.", act: ["tasks"] },
+    { id: "chat", app: "chat", t: "Chat and messages", k: ["chat", "message", "dm", "channel", "reply", "react", "mention"],
+      a: "Chat has channels (#general, or create your own with +) and direct messages to anyone in the workspace. Hover a message (tap it on a phone) to react, edit or delete. Type <b>@name</b> to mention someone. You can also chat right from <b>Home → Quick chat</b>.", act: ["chat"] },
+    { id: "call", app: "chat", t: "Video calls", k: ["video", "call", "meet", "meeting", "jitsi", "camera"],
+      a: "Press <b>📹 Video call</b> in a chat (or on Home). It opens a free Jitsi Meet room in a new tab and posts a “Join call” button so others can jump in.", act: ["chat"] },
+    { id: "feed", app: "feed", t: "Feed, announcements and polls", k: ["feed", "post", "announcement", "poll", "appreciation", "thanks", "like"],
+      a: "Write a Post, an 📣 Announcement (pinned and notified to everyone), a 📊 Poll or a 🏅 Appreciation for a teammate. Like and comment under each post.", act: ["feed"] },
+    { id: "calendar", app: "calendar", t: "Calendar and events", k: ["calendar", "event", "schedule", "agenda", "date", "week", "month"],
+      a: "Click any day to add an event. The calendar also shows task deadlines, CRM close dates and time off; toggle them at the top. Month, Week and Agenda views are available.", act: ["calendar"] },
+    { id: "crm", app: "crm", t: "CRM: leads and deals", k: ["crm", "deal", "currency", "lead", "customer", "contact", "company", "pipeline", "sales", "client", "money"],
+      a: "Add <b>Leads</b>, then <b>Convert</b> them into a contact + deal. Drag deals across the pipeline (New → Won/Lost). Each record has an activity log (calls, meetings, notes). Change the currency at the top of the CRM.", act: ["crm"] },
+    { id: "currency", app: "crm", t: "Change the currency", k: ["currency", "money", "rupee", "inr", "usd", "dollar", "euro"],
+      a: "Open the <b>CRM</b> and use the currency menu (INR, USD, EUR, GBP, AED) next to <b>+ New deal</b>. All deal amounts and totals switch right away.", act: ["crm"] },
+    { id: "hr", app: "company", t: "Time off and team directory", k: ["absence", "vacation", "leave", "sick", "holiday", "directory", "employee", "department", "off"],
+      a: "<b>Company & HR</b> has the employee directory, an org chart by department, and the <b>Absence chart</b>. Press <b>+ Time off</b> to add vacation, sick leave, remote or a trip. Absences show on Home and the Calendar.", act: ["company"] },
+    { id: "clock", app: "company", t: "Clock in / track my hours", k: ["clock", "time", "hours", "work", "workday", "track", "attendance", "timer"],
+      a: "Press <b>▶ Start day</b> on Home (or Company & HR → Time tracking). Pause for breaks and End when done. A timer appears in the top bar, and the weekly report shows everyone's hours.", act: ["company"] },
+    { id: "drive", app: "drive", t: "Drive: shared files", k: ["drive", "file", "folder", "upload", "document", "storage"],
+      a: "Drop files onto Drive or press <b>Upload</b>. Create folders, preview images and PDFs, and add links for big files (free plan: about 700 KB per uploaded file).", act: ["drive"] },
+    { id: "automation", app: "automation", t: "Automation rules", k: ["automation", "rule", "automatic", "trigger", "workflow"],
+      a: "Automation runs “When X, then Y” rules, e.g. <i>deal won → create onboarding task</i> or <i>task overdue → post in chat</i>. Start from a quick-start template, then switch rules on or off.", act: ["automation"] },
+    { id: "notifications", t: "Notifications", k: ["notification", "bell", "alert", "notify", "unread"],
+      a: "The 🔔 bell (top right) lists assignments, mentions, DMs, comments and announcements. Click one to jump there; “Mark all read” clears them. Unread ones also show on Home.", act: [] },
+
+    // ---------- look & device ----------
+    { id: "theme", t: "Dark mode, colours and glass", k: ["dark", "light", "theme", "color", "accent", "glass", "blur", "transparent", "transparency"],
+      a: "Open <b>Settings</b>: Appearance (light / dark / system), accent colour, <b>Glass blur</b> and <b>Glass transparency</b> (changes show live behind the window), and animations on/off. <b>Ctrl Shift L</b> toggles dark mode.", act: ["settings", "theme"] },
+    { id: "slow", t: "It feels slow", k: ["slow", "lag", "laggy", "performance", "battery", "hot", "fps", "heavy"],
+      a: "Glass effects and animations use the graphics card. In <b>Settings</b>, turn <b>Animations</b> off and lower <b>Glass blur</b>. Closing other heavy tabs helps too.", act: ["settings"] },
+    { id: "mobile", t: "Use Lumen on my phone", k: ["mobile", "phone", "android", "iphone", "install", "app", "homescreen", "tablet"],
+      a: "Open <b>lumenspaceapp.github.io</b> on your phone. To install it: Chrome → ⋮ → <b>Add to Home screen</b>; iPhone Safari → Share → <b>Add to Home Screen</b>. On a phone the sidebar opens with ☰, and you long-press to drag.", act: [] },
+    { id: "update", t: "Changes or fixes aren't showing", k: ["update", "changes", "refresh", "old", "cache", "stale", "showing", "version", "fix", "latest"],
+      a: "Do a hard refresh: <b>Ctrl Shift R</b> (Mac: Cmd Shift R). On a phone, close the tab and open it again. Lumen checks for the newest version every time it loads.", act: ["reload"] },
+    { id: "offline", t: "Offline and syncing", k: ["offline", "sync", "synced", "internet", "connection", "save", "saved", "lost"],
+      a: "Everything saves automatically: the top bar says <b>Saved</b> (private) or <b>Synced</b> (shared). Shared workspaces keep working offline and sync when you're back online. If it says “Sync failed”, check your connection, then run <b>Check my setup</b>.", act: ["check"] },
+    { id: "address", t: "The old address", k: ["address", "url", "link", "old", "gamerslife", "moved", "domain"],
+      a: "Lumen moved to <b>lumenspaceapp.github.io</b>. The old address forwards here. If you had private pages there, open the old address once and press <b>Move my pages & continue</b>.", act: [] },
+    { id: "delete-ws", t: "Delete a shared workspace", k: ["delete", "workspace", "remove", "close", "shared"],
+      a: "Owner only: open <b>Share → Delete shared workspace</b>. It permanently deletes all its pages and data for every member.", act: ["invite"] },
+    { id: "reset", t: "Start over / reset", k: ["reset", "start", "over", "clear", "wipe", "demo"],
+      a: "<b>Settings → Reset</b> replaces your <i>private</i> workspace with the demo pages (export a backup first). Shared workspaces aren't affected.", act: ["settings"] },
+  ];
+
+  const SYN = { teammate: "member", friend: "member", colleague: "member", coworker: "member", team: "member", people: "member", user: "member", members: "member", friends: "member",
+    visible: "see", appear: "see", appearing: "see", showing: "see", shows: "see", seen: "see", view: "see", cant: "can't", cannot: "can't",
+    login: "signin", "log-in": "signin", logging: "signin", signin: "signin", signing: "signin", sign: "signin",
+    remove: "delete", erase: "delete", deleting: "delete", deleted: "delete", bin: "trash",
+    phone: "mobile", android: "mobile", iphone: "mobile", ios: "mobile", tablet: "mobile", ipad: "mobile",
+    invitation: "invite", invited: "invite", invites: "invite", inviting: "invite",
+    msg: "message", messages: "message", texting: "message", dms: "dm", posts: "post", tasks: "task", todos: "todo",
+    pic: "picture", dp: "avatar", pfp: "avatar", photo: "picture", colour: "color", colors: "color", darkmode: "dark",
+    meeting: "meet", calls: "call", leaves: "leave", holidays: "holiday", deals: "deal", leads: "lead", files: "file", uploads: "upload",
+    notifications: "notification", notif: "notification", workspaces: "workspace", pages: "page", blocks: "block", lagging: "slow", lags: "slow" };
+  const STOP = new Set("a an the i my me to is it in on of for and or how do does did can could why what where when which with this that be are am was not no you your we our there here get got please help want need".split(" "));
+  const tokens = s => String(s).toLowerCase().replace(/[^a-z0-9'\s-]/g, " ").split(/\s+/).filter(Boolean).map(w => SYN[w] || w).filter(w => !STOP.has(w));
+  // similar enough? (same word, a prefix of 4+ letters, or one typo)
+  const lev = (a, b) => { const d = Array.from({ length: b.length + 1 }, (_, j) => j);
+    for (let i = 1; i <= a.length; i++) { let prev = d[0]; d[0] = i; for (let j = 1; j <= b.length; j++) { const t = d[j]; d[j] = Math.min(d[j] + 1, d[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = t; } }
+    return d[b.length]; };
+  // same word → 1, shared beginning (4+ letters) → .8, a typo (1 letter off, 2 for long words) → .8
+  const near = (a, b) => {
+    if (a === b) return 1;
+    if (a.length >= 4 && b.length >= 4 && (a.startsWith(b) || b.startsWith(a))) return .8;
+    const L = Math.min(a.length, b.length); if (L < 4 || Math.abs(a.length - b.length) > 2) return 0;
+    return lev(a, b) <= (L >= 8 ? 2 : 1) ? .8 : 0;
+  };
+  function search(q) {
+    const words = tokens(q);
+    if (!words.length) return [];
+    return KB.map(e => {
+      let s = 0;
+      const seen = new Set();
+      e.k.forEach((k, idx) => { const w = idx < 3 ? 2 : 1, kk = SYN[k] || k; if (seen.has(kk)) return; seen.add(kk); const best = Math.max(0, ...words.map(x => near(x, kk))); s += best * w; });
+      tokens(e.t).forEach(t => { if (words.some(x => near(x, t) >= .8)) s += .6; });
+      return { e, s };
+    }).filter(x => x.s >= 1.5).sort((a, b) => b.s - a.s);
+  }
+  window.HelpKB = { KB, search, byId: id => KB.find(e => e.id === id) };
+})();

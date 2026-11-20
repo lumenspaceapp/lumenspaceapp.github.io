@@ -19,6 +19,7 @@
       { t: "Open trash", ic: "🗑️", run: () => Page.trashModal() },
       { t: "Browse templates", ic: "🧩", run: () => Page.templatesModal() },
       { t: "Focus mode", ic: "🎯", run: () => App.focusMode() },
+      { t: "Help: ask Lumi", ic: "✨", run: () => window.Lumi?.open() },
     ];
   }
 

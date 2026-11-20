@@ -1,0 +1,52 @@
+/* ===== Lumi help assistant ===== */
+.lumi-fab { position: fixed; right: 22px; bottom: 22px; z-index: 90; width: 54px; height: 54px; border-radius: 18px; padding: 0; display: grid; place-items: center;
+  box-shadow: 0 14px 34px -10px rgba(124, 92, 255, .65), 0 0 0 1px rgba(255,255,255,.4) inset; transition: transform .35s var(--spring), border-radius .35s var(--ease), bottom .3s var(--ease); animation: pop .5s var(--spring) .6s both; }
+.lumi-fab img { width: 54px; height: 54px; border-radius: inherit; display: block; }
+.lumi-fab .lumi-q { position: absolute; right: -4px; top: -4px; width: 20px; height: 20px; border-radius: 50%; background: var(--glass-strong); color: var(--accent); font-weight: 800; font-size: 12px; display: grid; place-items: center; box-shadow: var(--shadow); }
+.lumi-fab:hover { transform: translateY(-3px) scale(1.05) rotate(-4deg); }
+.lumi-fab.open { transform: scale(.9); border-radius: 50%; }
+.lumi-fab.open .lumi-q { display: none; }
+body[data-app="chat"] .lumi-fab { bottom: 92px; }
+body.touch-dragging .lumi-fab { opacity: 0; pointer-events: none; }
+
+.lumi { position: fixed; right: 22px; bottom: 88px; z-index: 95; width: min(390px, calc(100vw - 24px)); height: min(600px, calc(100vh - 120px)); border-radius: 22px; display: flex; flex-direction: column; overflow: hidden;
+  transform-origin: bottom right; animation: lumiIn .35s var(--spring); background: color-mix(in srgb, var(--bg) 90%, transparent); }
+.lumi.closing { animation: lumiIn .2s var(--ease) reverse forwards; }
+@keyframes lumiIn { from { opacity: 0; transform: translateY(16px) scale(.92); } to { opacity: 1; transform: none; } }
+body[data-app="chat"] .lumi { bottom: 158px; height: min(560px, calc(100vh - 190px)); }
+.lumi-head { display: flex; align-items: center; gap: 10px; padding: 12px 12px 12px 16px; border-bottom: 1px solid var(--line);
+  background: linear-gradient(120deg, color-mix(in srgb, var(--accent) 16%, transparent), color-mix(in srgb, #ec4899 10%, transparent)); }
+.lumi-head img { width: 34px; height: 34px; border-radius: 11px; }
+.lumi-head b { display: block; font-size: 15px; } .lumi-head small { font-size: 11.5px; color: var(--muted); }
+.lumi-stream { flex: 1; overflow-y: auto; padding: 14px 12px; display: flex; flex-direction: column; gap: 10px; scroll-behavior: smooth; }
+.lumi-msg { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
+.lumi-msg.in { animation: fadeUp .3s var(--ease); }
+.lumi-msg.me { justify-content: flex-end; }
+.lumi-av { width: 26px; height: 26px; border-radius: 8px; flex-shrink: 0; margin-top: 2px; }
+.lumi-bubble { max-width: calc(100% - 40px); padding: 10px 13px; border-radius: 16px 16px 16px 5px; background: var(--hover); font-size: 13.8px; line-height: 1.55; word-break: break-word; }
+.lumi-bubble code { font-family: var(--mono); font-size: .85em; background: var(--code-bg); padding: 1px 5px; border-radius: 5px; }
+.lumi-msg.me .lumi-bubble { border-radius: 16px 16px 5px 16px; background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #ec4899)); color: #fff; }
+.lumi-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.lumi-act { padding: 6px 11px; border-radius: 10px; font-size: 12.5px; font-weight: 600; background: var(--glass-strong); border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line)); color: var(--text); transition: transform .25s var(--spring), border-color .2s; }
+.lumi-act:hover { transform: translateY(-2px); border-color: var(--accent); }
+.lumi-rate { display: flex; align-items: center; gap: 4px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+.lumi-rate button { padding: 2px 6px; border-radius: 7px; font-size: 14px; transition: transform .2s var(--spring), background .15s; }
+.lumi-rate button:hover { background: var(--active); transform: scale(1.15); }
+.lumi-chips { display: flex; flex-wrap: wrap; gap: 6px; padding-left: 34px; width: 100%; }
+.lumi-chip { padding: 6px 11px; border-radius: 20px; font-size: 12.5px; color: var(--accent); background: var(--accent-soft); border: 1px solid transparent; text-align: left; transition: border-color .2s, transform .25s var(--spring); }
+.lumi-chip:hover { border-color: var(--accent); transform: translateY(-1px); }
+.lumi-typing { display: flex; gap: 4px; padding: 13px 14px; }
+.lumi-typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: lumiDot 1s ease-in-out infinite; }
+.lumi-typing i:nth-child(2) { animation-delay: .15s; } .lumi-typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes lumiDot { 0%, 60%, 100% { transform: translateY(0); opacity: .4; } 30% { transform: translateY(-5px); opacity: 1; } }
+.lumi-compose { display: flex; gap: 8px; padding: 10px 12px 12px; border-top: 1px solid var(--line); }
+.lumi-input { flex: 1; min-width: 0; padding: 10px 13px; border-radius: 12px; border: 1px solid var(--line); background: var(--glass); outline: none; font-size: 14px; transition: border-color .2s, box-shadow .2s; }
+.lumi-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+@media (max-width: 760px) {
+  .lumi-fab { right: 14px; bottom: calc(14px + env(safe-area-inset-bottom)); width: 48px; height: 48px; border-radius: 16px; }
+  .lumi-fab img { width: 48px; height: 48px; }
+  body[data-app="chat"] .lumi-fab { bottom: calc(78px + env(safe-area-inset-bottom)); }
+  .lumi, body[data-app="chat"] .lumi { inset: 8px 8px calc(8px + env(safe-area-inset-bottom)); width: auto; height: auto; border-radius: 20px; }
+  .lumi-input { font-size: 16px; }
+}
