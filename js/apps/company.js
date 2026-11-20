@@ -104,7 +104,7 @@
               return [h("span", { class: "who" }, Apps.avatar(p, 20), p.name), ...cells, h("b", { class: "tw-c", text: hm(tot) })]; }))));
     }
     function draw() { body.replaceChildren(tab === "structure" ? structure() : tab === "absence" ? absence() : tab === "time" ? time() : people()); }
-    const offs = ["people", "absences", "timelog"].map(c => Data.on(c, () => { if (!body.contains(document.activeElement)) draw(); }));
+    const offs = ["people", "absences", "timelog"].map(c => Data.on(c, UI.liveDraw(body, draw)));
     const t = setInterval(() => tab === "time" && draw(), 30000);
     return () => { offs.forEach(f => f()); clearInterval(t); };
   }

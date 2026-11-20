@@ -176,5 +176,17 @@
     return new Date(t).toLocaleDateString();
   }
 
-  window.UI = { h, esc, icon, ICONS, popover, closePops, menu, modal, confirm, toast, emojiPicker, coverPicker, timeAgo, place };
+  /* Live redraw that never throws away what you're typing: if a text field inside `root` has focus,
+     wait until you leave it, then redraw (clicked buttons, checkboxes etc. don't block updates). */
+  function liveDraw(root, draw) {
+    let waiting = false;
+    const typing = () => { const a = document.activeElement; return !!a && root.contains(a) && (a.isContentEditable || a.tagName === "TEXTAREA" || a.tagName === "SELECT" || (a.tagName === "INPUT" && !/^(checkbox|radio|button|submit|range|color|file)$/.test(a.type))); };
+    return () => {
+      if (!typing()) return draw();
+      if (waiting) return;
+      waiting = true;
+      root.addEventListener("focusout", function later() { setTimeout(() => { if (typing()) return; root.removeEventListener("focusout", later); waiting = false; draw(); }, 0); });
+    };
+  }
+  window.UI = { liveDraw, h, esc, icon, ICONS, popover, closePops, menu, modal, confirm, toast, emojiPicker, coverPicker, timeAgo, place };
 })();

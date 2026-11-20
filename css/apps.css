@@ -134,6 +134,7 @@
 .poll-edit { display: grid; gap: 6px; margin: 8px 0 0 48px; }
 .feed-list { display: grid; gap: 14px; }
 .feed-post { border-radius: 18px; padding: 16px 18px; animation: fadeUp .4s var(--ease) both; }
+.feed-post.no-anim { animation: none; }
 .feed-post.announce { box-shadow: var(--shadow), inset 3px 0 0 var(--c-orange); }
 .fp-head { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
 .fp-badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 20px; background: var(--bg-orange); margin-bottom: 8px; }

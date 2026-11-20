@@ -75,8 +75,8 @@
       a: "Drop files onto Drive or press <b>Upload</b>. Create folders, preview images and PDFs, and add links for big files (free plan: about 700 KB per uploaded file).", act: ["drive"] },
     { id: "automation", app: "automation", t: "Automation rules", k: ["automation", "rule", "automatic", "trigger", "workflow"],
       a: "Automation runs “When X, then Y” rules, e.g. <i>deal won → create onboarding task</i> or <i>task overdue → post in chat</i>. Start from a quick-start template, then switch rules on or off.", act: ["automation"] },
-    { id: "notifications", t: "Notifications", k: ["notification", "bell", "alert", "notify", "unread"],
-      a: "The 🔔 bell (top right) lists assignments, mentions, DMs, comments and announcements. Click one to jump there; “Mark all read” clears them. Unread ones also show on Home.", act: [] },
+    { id: "notifications", t: "Notifications", k: ["notification", "notifications", "bell", "alert", "notify", "unread", "sound", "popup", "reminder", "not getting messages"],
+      a: "New chat messages, task assignments, mentions, comments and announcements pop up as a card with a soft chime, and the 🔔 bell (top right) keeps the list; “Mark all read” clears it. To get them while Lumen is in the background, click **Turn on** in the bell menu (or **Settings → Notifications**) and allow notifications. There you can also mute the sound, choose **All messages** or **DMs & @mentions** for chat, and **Send a test**. If it says Blocked, click the 🔒 icon next to the address and allow Notifications. Events remind you 10 minutes before, and you get a daily nudge for tasks due today.", act: ["settings"] },
 
     // ---------- look & device ----------
     { id: "theme", t: "Dark mode, colours and glass", k: ["dark", "light", "theme", "color", "accent", "glass", "blur", "transparent", "transparency"],

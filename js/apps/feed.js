@@ -20,7 +20,7 @@
       h("div", { class: "fc-bar" }, kinds, thanksBtn, h("span", { class: "grow" }), h("button", { class: "btn primary", text: "Publish", onclick: publish })));
     const list = h("div", { class: "feed-list" });
     root.append(Apps.header("Activity Feed", "📰", "News and updates from your workspace"),
-      composer, Apps.tabs([["all", "All"], ["announce", "Announcements"], ["poll", "Polls"], ["thanks", "Appreciation"], ["mine", "My posts"]], filter, k => { filter = k; draw(); }), list);
+      composer, Apps.tabs([["all", "All"], ["announce", "Announcements"], ["poll", "Polls"], ["thanks", "Appreciation"], ["mine", "My posts"]], filter, k => { filter = k; redrawAll(); }), list);
 
     async function publish() {
       const t = text.value.trim(); const me = Data.me();
@@ -40,13 +40,41 @@
       }
       text.value = ""; UI.toast("Published");
     }
+    const built = new Map(); // post id -> { sig, el }
+    let first = true;
     function draw() {
       const me = Data.me().key;
       const posts = Data.list("feed").filter(p => filter === "all" || (filter === "mine" ? p.by === me : p.kind === filter))
         .sort((a, b) => (b.pinned && b.kind === "announce") - (a.pinned && a.kind === "announce") || b.at - a.at);
-      if (!posts.length) return list.replaceChildren(Apps.empty("📰", "Nothing here yet. Write the first post!"));
-      list.replaceChildren(...posts.map((p, i) => post(p, i)));
+      if (!posts.length) { built.clear(); return list.replaceChildren(Apps.empty("📰", "Nothing here yet. Write the first post!")); }
+      let refocus = null;
+      const els = posts.map((p, i) => {
+        const sig = JSON.stringify([p.text, p.likes, p.comments, p.poll, p.pinned, p.to, p.kind]);
+        const old = built.get(p.id);
+        if (old && old.sig === sig) return old.el;
+        const el = post(p, i);
+        if (!first) el.classList.add("no-anim");
+        if (old) { // keep a comment someone is typing on this post
+          const was = old.el.querySelector(".fp-cin"), now = el.querySelector(".fp-cin");
+          if (was && now && was.value) { now.value = was.value; if (document.activeElement === was) refocus = now; }
+        }
+        built.set(p.id, { sig, el });
+        return el;
+      });
+      const keep = new Set(posts.map(p => p.id));
+      for (const id of built.keys()) if (!keep.has(id)) built.delete(id);
+      // only touch the DOM where something changed
+      els.forEach((el, i) => { if (list.children[i] !== el) list.insertBefore(el, list.children[i] || null); });
+      while (list.children.length > els.length) list.lastChild.remove();
+      if (refocus) { const n = refocus.value.length; refocus.focus(); refocus.setSelectionRange(n, n); }
+      first = false;
     }
+    const redrawAll = () => {
+      const typed = {}; let focusId = null;
+      built.forEach(({ el }, id) => { const c = el.querySelector(".fp-cin"); if (c?.value) typed[id] = c.value; if (c && document.activeElement === c) focusId = id; });
+      built.clear(); draw();
+      built.forEach(({ el }, id) => { const c = el.querySelector(".fp-cin"); if (c && typed[id]) c.value = typed[id]; if (c && id === focusId) c.focus(); });
+    };
     function post(p, i) {
       const me = Data.me().key, author = Data.person(p.by), liked = (p.likes || []).includes(me);
       const body = [];
@@ -61,8 +89,8 @@
             h("span", { class: "po-bar", style: { width: (voted ? pct : 0) + "%" } }), h("span", { class: "po-t", text: (mine ? "✓ " : "") + o.t }), voted ? h("span", { class: "po-p", text: pct + "%" }) : null);
         }), h("small", { text: `${total} vote${total === 1 ? "" : "s"}` })));
       }
-      const cin = h("input", { class: "menu-input", placeholder: "Write a comment…" });
-      cin.onkeydown = e => { if (e.key === "Enter" && cin.value.trim()) { Data.update("feed", p.id, { comments: [...(p.comments || []), { by: me, text: cin.value.trim(), at: Date.now() }] }); if (p.by !== me) Data.notify(p.by, `<b>${esc(Data.me().name)}</b> commented on your post`, "#/app/feed"); cin.value = ""; cin.blur(); draw(); } };
+      const cin = h("input", { class: "menu-input fp-cin", placeholder: "Write a comment…" });
+      cin.onkeydown = e => { if (e.key === "Enter" && cin.value.trim()) { Data.arr("feed", p.id, "comments", { by: me, text: cin.value.trim(), at: Date.now() }); if (p.by !== me) Data.notify(p.by, `<b>${esc(Data.me().name)}</b> commented on your post`, "#/app/feed"); cin.value = ""; } };
       return h("article", { class: "feed-post glass" + (p.kind === "announce" ? " announce" : ""), style: { animationDelay: Math.min(i * 40, 300) + "ms" } },
         h("div", { class: "fp-head" }, Apps.avatar(author, 38), h("div", { class: "grow" }, h("b", { text: author.name }), h("div", { class: "app-sub", text: UI.timeAgo(p.at) + (p.kind === "poll" ? " · Poll" : "") })),
           p.by === me ? h("button", { class: "icon-btn xs", html: UI.icon("dots"), onclick: e => UI.menu(e.currentTarget, [
@@ -70,12 +98,15 @@
             { label: "Delete post", icon: "trash", danger: true, onClick: async () => { if (await UI.confirm("Delete this post?")) Data.remove("feed", p.id); } }], { align: "end" }) }) : null),
         ...body,
         h("div", { class: "fp-bar" },
-          h("button", { class: "like" + (liked ? " on" : ""), onclick: () => Data.update("feed", p.id, { likes: liked ? p.likes.filter(k => k !== me) : [...(p.likes || []), me] }) }, (liked ? "❤️" : "🤍") + " " + ((p.likes || []).length || "Like")),
+          h("button", { class: "like" + (liked ? " on" : ""), onclick: () => Data.arr("feed", p.id, "likes", me, !liked) }, (liked ? "❤️" : "🤍") + " " + ((p.likes || []).length || "Like")),
           h("span", { class: "app-sub", text: `💬 ${(p.comments || []).length}` })),
         (p.comments || []).length ? h("div", { class: "comments" }, ...p.comments.map(c => h("div", { class: "cmt" }, Apps.avatar(Data.person(c.by), 26), h("div", null, h("div", { class: "cmt-h" }, h("b", { text: Data.person(c.by).name }), h("small", { text: UI.timeAgo(c.at) })), h("div", { class: "cmt-t", text: c.text }))))) : null,
         cin);
     }
-    const offs = [Data.on("feed", () => { if (!list.contains(document.activeElement)) draw(); }), Data.on("people", draw)];
+    // live: every like, comment, vote and new post from anyone shows up immediately
+    const offs = [Data.on("feed", draw), Data.on("people", redrawAll)];
+    const tick = setInterval(redrawAll, 60000); // keep "2 min ago" fresh
+    offs.push(() => clearInterval(tick));
     return () => offs.forEach(f => f());
   }
 

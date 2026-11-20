@@ -36,7 +36,7 @@
   function openRecord(col, id) {
     const body = h("div", { class: "crm-rec" });
     const p = Apps.panel(LABEL[col][0].toUpperCase() + LABEL[col].slice(1), body, [h("button", { class: "btn", text: "Edit", onclick: () => edit(col, Data.get(col, id)) })]);
-    const off = Data.on(col, () => { if (!body.contains(document.activeElement)) draw(); }); p.onClose = off;
+    const off = Data.on(col, UI.liveDraw(body, draw)); p.onClose = off;
     function draw() {
       const r = Data.get(col, id); if (!r) return p.close();
       const info = [];

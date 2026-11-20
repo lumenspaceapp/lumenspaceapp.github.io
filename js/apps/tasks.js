@@ -35,7 +35,7 @@
     const body = h("div", { class: "task-detail" });
     const p = Apps.panel("Task", body, [h("button", { class: "icon-btn", title: "Delete task", html: UI.icon("trash"), onclick: async () => { if (await UI.confirm("Delete this task?")) { Data.remove("tasks", id); p.close(); } } })]);
     const set = (patch, rerender) => { Data.update("tasks", id, patch); if (rerender) draw(); };
-    const off = Data.on("tasks", () => { if (!body.contains(document.activeElement)) draw(); });
+    const off = Data.on("tasks", UI.liveDraw(body, draw));
     p.onClose = off;
     function draw() {
       const t = Data.get("tasks", id); if (!t) return p.close();

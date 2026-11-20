@@ -49,6 +49,16 @@
       else { (local[col] ||= {})[id] = cache[col][id]; saveLocal(); }
       Data.hook("update", col, cache[col][id], before);
     },
+    // add/remove one item of an array field without overwriting what others added at the same moment (likes, comments)
+    async arr(col, id, field, value, add = true) {
+      ensure(col); const before = cache[col][id] ? { ...cache[col][id] } : null;
+      const cur = (cache[col][id] || {})[field] || [], same = x => JSON.stringify(x) === JSON.stringify(value);
+      const next = add ? (cur.some(same) ? cur : [...cur, value]) : cur.filter(x => !same(x));
+      cache[col][id] = { ...(cache[col][id] || { id }), [field]: next }; emit(col);
+      if (cloud()) { const { fb, ref } = Cloud.fs; await fb.setDoc(fb.doc(ref(), col, id), { [field]: add ? fb.arrayUnion(clean(value)) : fb.arrayRemove(clean(value)) }, { merge: true }).catch(err); }
+      else { (local[col] ||= {})[id] = cache[col][id]; saveLocal(); }
+      Data.hook("update", col, cache[col][id], before);
+    },
     async remove(col, id) {
       ensure(col); const before = cache[col][id]; delete cache[col][id]; emit(col);
       if (cloud()) { const { fb, ref } = Cloud.fs; await fb.deleteDoc(fb.doc(ref(), col, id)).catch(err); }

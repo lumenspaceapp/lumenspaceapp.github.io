@@ -87,7 +87,9 @@
         avatar(Data.person(n.by), 26), h("span", { class: "nt" }, h("span", { html: n.text }), h("small", { text: UI.timeAgo(n.at) }))));
       const box = h("div", { style: { width: "340px" } }, h("div", { class: "menu-sec", style: { display: "flex", justifyContent: "space-between" } }, "Notifications",
         mine.some(n => !n.read) ? h("a", { style: { cursor: "pointer", textTransform: "none", color: "var(--accent)" }, text: "Mark all read", onclick: () => { mine.filter(n => !n.read).forEach(n => Data.update("notifications", n.id, { read: true })); UI.closePops(); } }) : null),
-        ...(items.length ? items : [h("div", { class: "menu-empty", text: "You're all caught up ✨" })]));
+        ...(items.length ? items : [h("div", { class: "menu-empty", text: "You're all caught up ✨" })]),
+        window.Notify && Notify.perm() === "default" ? h("div", { class: "nt-bell-ask" }, h("span", { text: "🔔 Get notified on this device, even in the background" }),
+          h("button", { class: "btn primary", text: "Turn on", onclick: () => { UI.closePops(); Notify.enable(); } })) : null);
       UI.popover(bell, box, { align: "end" });
     };
   }

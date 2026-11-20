@@ -5,6 +5,15 @@ self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", e => e.waitUntil(
   caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())
 ));
+self.addEventListener("notificationclick", e => {
+  e.notification.close();
+  const link = e.notification.data?.link || "";
+  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(list => {
+    const tab = list.find(c => new URL(c.url).origin === location.origin);
+    if (tab) { tab.postMessage({ type: "lumen-open", link }); return tab.focus(); }
+    return self.clients.openWindow("./" + link);
+  }));
+});
 self.addEventListener("fetch", e => {
   const req = e.request;
   if (req.method !== "GET" || new URL(req.url).origin !== location.origin) return; // never touch Firebase / Google calls
