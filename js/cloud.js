@@ -29,6 +29,7 @@ async function init() {
   auth = a.getAuth(fapp);
   try { db = f.initializeFirestore(fapp, { localCache: f.persistentLocalCache({ tabManager: f.persistentMultipleTabManager() }) }); }
   catch { db = f.getFirestore(fapp); }
+  await handleInviteLanding();
   a.onAuthStateChanged(auth, async user => {
     Cloud.user = user; renderAccount();
     if (listUnsub) { listUnsub(); listUnsub = null; }
@@ -41,6 +42,46 @@ async function init() {
     const want = link ? link[1] : localStorage.getItem("lumen-active-ws");
     if (want) await open(want, link?.[2]); else App.bootLocal?.();
   });
+}
+
+/* ---------- emailed invites (Firebase email-link sign-in) ---------- */
+// The invite email links to  <site>/?ws=<id>&mode=signIn&oobCode=…  Turn it into a signed-in visit to #/ws/<id>.
+async function handleInviteLanding() {
+  const params = new URLSearchParams(location.search);
+  const wsId = params.get("ws");
+  if (!wsId) return;
+  const clean = () => history.replaceState(null, "", location.pathname + "#/ws/" + wsId);
+  if (!fb.isSignInWithEmailLink(auth, location.href)) return clean();
+  await auth.authStateReady();
+  if (auth.currentUser) return clean(); // already signed in on this device
+  const href = location.href;
+  clean();
+  const inp = h("input", { class: "menu-input", type: "email", placeholder: "you@gmail.com", value: localStorage.getItem("lumen-invite-email") || "" });
+  const msg = h("div", { style: { fontSize: "13px", color: "var(--c-red)", minHeight: "18px" } });
+  const go = h("button", { class: "btn primary", text: "Join workspace" });
+  const google = h("button", { class: "btn", text: "Use Google sign-in instead" });
+  const m = UI.modal("You're invited 👋", h("div", null,
+    h("p", { style: { marginTop: 0, color: "var(--muted)" }, text: "Confirm the email address this invite was sent to, and you'll go straight into the shared workspace." }),
+    inp, msg, h("div", { style: { display: "flex", gap: "8px", justifyContent: "flex-end", marginTop: "6px" } }, google, go)));
+  m.el.style.width = "440px"; setTimeout(() => inp.focus(), 60);
+  const submit = async () => {
+    const email = inp.value.trim().toLowerCase(); if (!email) return;
+    go.disabled = true; go.textContent = "Joining…"; msg.textContent = "";
+    try { await fb.signInWithEmailLink(auth, email, href); localStorage.removeItem("lumen-invite-email"); m.close(); }
+    catch (e) {
+      go.disabled = false; go.textContent = "Join workspace";
+      msg.textContent = e.code === "auth/invalid-email" ? "That isn't the address this invite was sent to."
+        : e.code === "auth/invalid-action-code" || e.code === "auth/expired-action-code" ? "This invite link expired or was already used. Use Google sign-in, or ask for a new invite."
+        : "Couldn't sign in: " + (e.code || e.message);
+    }
+  };
+  go.onclick = submit;
+  inp.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
+  google.onclick = async () => { m.close(); if (await signIn()) open(wsId); };
+}
+async function emailInvite(email) {
+  const url = `${location.origin}${location.pathname}?ws=${Cloud.ws.id}`;
+  await fb.sendSignInLinkToEmail(auth, email, { url, handleCodeInApp: true });
 }
 
 /* ---------- auth ---------- */
@@ -203,11 +244,24 @@ async function create(name, copyLocal) {
 async function invite(email) {
   email = email.trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return UI.toast("Enter a valid email address");
-  try { await fb.updateDoc(wsRef, { members: fb.arrayUnion(email) }); sendInviteDialog(email); return true; }
+  try { await fb.updateDoc(wsRef, { members: fb.arrayUnion(email) }); }
   catch (e) { UI.toast(e.code === "permission-denied" ? "Only the owner can invite people" : e.message); return false; }
+  await sendInvite(email);
+  return true;
 }
-// The app has no mail server: adding someone only allows them in. This dialog helps send them the link.
-function sendInviteDialog(email) {
+async function sendInvite(email) {
+  UI.toast(`Sending invite to ${email}…`);
+  try { await emailInvite(email); UI.toast(`✉️ Invite emailed to ${email}`); }
+  catch (e) {
+    console.warn(e);
+    const why = e.code === "auth/quota-exceeded" ? "Today's free limit of invite emails is used up."
+      : e.code === "auth/operation-not-allowed" ? "Email invites aren't switched on in Firebase yet."
+      : "The invite email couldn't be sent (" + (e.code || e.message) + ").";
+    sendInviteDialog(email, why);
+  }
+}
+// Fallback when the email can't be sent: help the owner send the link themselves.
+function sendInviteDialog(email, why) {
   const ws = Cloud.ws, link = `${location.href.split("#")[0]}#/ws/${ws.id}`;
   const from = Cloud.user.displayName || "A friend";
   const subject = `Join "${ws.name}" on Lumen Notes`;
@@ -216,8 +270,8 @@ function sendInviteDialog(email) {
     h("a", { class: "btn primary", href: `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, text: "✉️ Email it" }),
     navigator.share ? h("button", { class: "btn", text: "📤 Share…", onclick: () => navigator.share({ title: subject, text: body }).catch(() => {}) }) : null,
     h("button", { class: "btn", text: "🔗 Copy link", onclick: e => { navigator.clipboard?.writeText(link); e.currentTarget.textContent = "✓ Copied"; } }));
-  const m = UI.modal("Now send them the invite", h("div", null,
-    h("p", { style: { marginTop: 0, color: "var(--muted)" }, html: `<b>${esc(email)}</b> is now allowed into “${esc(ws.name)}”. Lumen doesn't send emails itself, so send them this link by email, WhatsApp or any chat:` }),
+  const m = UI.modal("Send the invite yourself", h("div", null,
+    h("p", { style: { marginTop: 0, color: "var(--muted)" }, html: `${esc(why || "")} <b>${esc(email)}</b> is allowed into “${esc(ws.name)}”, so send them this link by email, WhatsApp or any chat:` }),
     h("input", { class: "menu-input", value: link, readonly: true, onclick: e => e.target.select() }),
     h("p", { style: { color: "var(--muted)", fontSize: "13px", marginBottom: 0 }, text: "They must sign in with Google using exactly this email address." }), row));
   m.el.style.width = "480px";
@@ -302,7 +356,9 @@ Cloud.share = async anchor => {
   }
   ws.members.forEach(m => items.push({ el: h("div", { class: "mi compact", style: { cursor: "default" } },
     h("span", { class: "mi-ic", text: m === ws.ownerEmail ? "👑" : "👤" }), h("span", { class: "mi-t", style: { fontWeight: 400, fontSize: "13px" }, text: m + (m === me.email.toLowerCase() ? " (you)" : "") }),
-    isOwner && m !== ws.ownerEmail ? h("button", { class: "icon-btn xs", style: { marginLeft: "auto" }, title: "Remove", html: icon("x"), onclick: async () => { await removeMember(m); UI.closePops(); } }) : null) }));
+    isOwner && m !== ws.ownerEmail ? h("span", { style: { marginLeft: "auto", display: "flex", gap: "2px" } },
+      h("button", { class: "icon-btn xs", title: "Resend invite email", text: "✉️", onclick: () => { UI.closePops(); sendInvite(m); } }),
+      h("button", { class: "icon-btn xs", title: "Remove", html: icon("x"), onclick: async () => { await removeMember(m); UI.closePops(); } })) : null) }));
   items.push({ sep: true },
     { label: "Copy invite link", icon: "link", onClick: () => { navigator.clipboard?.writeText(`${base}#/ws/${ws.id}`); UI.toast("🔗 Invite link copied. Friends sign in with the email you invited."); } },
     { label: "Copy link to this page", icon: "page", onClick: () => App.copyLink(App.currentId) });
