@@ -27,7 +27,8 @@ async function init() {
   fb = { ...a, ...f };
   const fapp = app.initializeApp(cfg);
   auth = a.getAuth(fapp);
-  try { db = f.initializeFirestore(fapp, { localCache: f.persistentLocalCache() }); } catch { db = f.getFirestore(fapp); }
+  try { db = f.initializeFirestore(fapp, { localCache: f.persistentLocalCache({ tabManager: f.persistentMultipleTabManager() }) }); }
+  catch { db = f.getFirestore(fapp); }
   a.onAuthStateChanged(auth, async user => {
     Cloud.user = user; renderAccount();
     if (listUnsub) { listUnsub(); listUnsub = null; }
