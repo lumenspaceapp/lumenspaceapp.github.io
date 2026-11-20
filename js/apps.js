@@ -20,11 +20,31 @@
     v.append(root);
     v.classList.remove("enter"); void v.offsetWidth; v.classList.add("enter");
     cleanup = def.render(root, arg ? decodeURIComponent(arg) : "") || null;
+    const banner = soloBanner(); if (banner) root.prepend(banner);
     document.title = def.title + " · Lumen";
     renderNav();
   };
   Apps.leave = () => { closeSliders(); if (cleanup) { try { cleanup(); } catch {} cleanup = null; } current = null; renderNav(); };
   Apps.current = () => current;
+
+  /* Posts, chats and tasks only reach people in the same workspace: say so when nobody else is here. */
+  function soloBanner() {
+    const ws = window.Cloud?.ws;
+    if (ws && (ws.members || []).length > 1) return null;
+    const btn = h("button", { class: "btn primary" });
+    let text;
+    if (ws) {
+      text = `👥 Only you are in “${ws.name}”, so nobody else sees what you post here. Invite teammates by email to work together.`;
+      btn.textContent = "Invite people"; btn.onclick = () => Cloud.share(btn);
+    } else {
+      text = window.Cloud?.workspaces?.length
+        ? "💻 You're in your private workspace on this device. Switch to a shared workspace to see your team's posts, chats and tasks."
+        : "💻 You're in your private workspace on this device. Create a shared workspace and invite people to collaborate.";
+      btn.textContent = window.Cloud?.workspaces?.length ? "Switch workspace" : "Share with friends";
+      btn.onclick = () => window.Cloud?.workspaces?.length ? document.getElementById("wsSwitch").click() : window.Cloud?.share(btn);
+    }
+    return h("div", { class: "app-banner glass" }, h("span", { text }), btn);
+  }
 
   /* ---------- sidebar section ---------- */
   const badges = {};
