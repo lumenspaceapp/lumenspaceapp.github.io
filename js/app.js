@@ -204,11 +204,12 @@
     document.getElementById("outlineBtn").onclick = App.toggleOutline;
     document.getElementById("pageMenuBtn").onclick = e => Page.pageMenu(e.currentTarget);
     document.getElementById("shareBtn").onclick = e => {
-      if (window.Cloud?.ws) return Cloud.share(e.currentTarget);
+      const anchor = e.currentTarget; // e.currentTarget is null once the click has finished
+      if (window.Cloud?.ws) return Cloud.share(anchor);
       const p = Store.page(App.currentId);
-      UI.menu(e.currentTarget, [{ section: "Share" },
+      UI.menu(anchor, [{ section: "Share" },
         { label: "Copy link", icon: "link", onClick: () => App.copyLink(p.id) },
-        { label: "Share with friends…", icon: "plus", onClick: () => window.Cloud ? Cloud.share(e.currentTarget) : UI.toast("Sharing is still loading") },
+        { label: "Share with friends…", icon: "plus", onClick: () => window.Cloud ? Cloud.share(anchor) : UI.toast("Sharing is still loading") },
         { label: "Copy as Markdown", icon: "copy", onClick: () => { navigator.clipboard?.writeText(Page.toMd(p)); UI.toast("Markdown copied"); } },
         { el: h("div", { class: "menu-empty", style: { maxWidth: "240px", fontSize: "12px" }, text: "This workspace is private to this browser. Share with friends to move it into a shared workspace everyone can edit live." }) }], { align: "end" });
     };

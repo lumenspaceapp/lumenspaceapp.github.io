@@ -34,7 +34,8 @@
   /* ---------- Popovers ---------- */
   const pops = [];
   function place(el, anchor, align = "start") {
-    const r = anchor instanceof Element ? anchor.getBoundingClientRect() : anchor;
+    const r = anchor instanceof Element && anchor.isConnected ? anchor.getBoundingClientRect()
+      : anchor && "top" in anchor ? anchor : { left: innerWidth / 2 - 130, right: innerWidth / 2 + 130, top: innerHeight / 3, bottom: innerHeight / 3 };
     const pw = el.offsetWidth, ph = el.offsetHeight, vw = innerWidth, vh = innerHeight;
     let x = align === "end" ? r.right - pw : r.left;
     let y = r.bottom + 6;
