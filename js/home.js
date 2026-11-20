@@ -103,8 +103,10 @@
       const ch = chatWith || "general";
       const chName = ch === "general" ? "# general" : Data.person(ch.slice(3).split("|").find(k => k !== m)).name;
       const people = h("div", { class: "hm-people" },
-        h("button", { class: "hm-pp" + (ch === "general" ? " on" : ""), title: "#general", onclick: () => { chatWith = null; drawChat(); } }, h("span", { class: "hm-hash", text: "#" }), unread("general") ? h("i", { text: unread("general") }) : null),
-        ...ppl.map(p => { const id = dmId(m, p.key), u = unread(id); return h("button", { class: "hm-pp" + (ch === id ? " on" : ""), title: p.name + (p.online ? " · online" : ""), onclick: () => { chatWith = id; drawChat(); } }, Apps.avatar(p, 34), u ? h("i", { text: u }) : null); }));
+        h("button", { class: "hm-pp" + (ch === "general" ? " on" : ""), title: "#general", onclick: () => { chatWith = null; drawChat(); } },
+          h("span", { class: "hm-pp-av" }, h("span", { class: "hm-hash", text: "#" }), unread("general") ? h("i", { text: unread("general") }) : null), h("small", { text: "general" })),
+        ...ppl.map(p => { const id = dmId(m, p.key), u = unread(id); return h("button", { class: "hm-pp" + (ch === id ? " on" : ""), title: p.name + (p.online ? " · online" : ""), onclick: () => { chatWith = id; drawChat(); } },
+          h("span", { class: "hm-pp-av" }, Apps.avatar(p, 36), u ? h("i", { text: u }) : null), h("small", { text: String(p.name || "").split(" ")[0] })); }));
       const recent = msgs.filter(x => x.channel === ch).sort((a, b) => a.at - b.at).slice(-5);
       const thread = h("div", { class: "hm-thread" }, ...(recent.length ? recent.map(x => h("div", { class: "hm-msg" + (x.by === m ? " mine" : "") }, Apps.avatar(Data.person(x.by), 22),
         h("div", { class: "hm-bubble" }, h("small", { text: Data.person(x.by).name.split(" ")[0] + " · " + new Date(x.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }), x.kind === "call" ? h("a", { href: x.url, target: "_blank", rel: "noopener", text: "📹 Join video call" }) : h("span", { text: x.text }))))
@@ -120,7 +122,7 @@
       const rr = lastRead(); rr[ch] = Date.now(); localStorage.setItem(readKey(), JSON.stringify(rr));
       cards.chat.replaceChildren(card("hm-chat", "Quick chat", "💬", link("Open chat →", () => Apps.go("chat", ch === "general" ? "" : ch)), people, h("div", { class: "hm-chat-with", text: chName }), thread, input));
       setTimeout(() => { thread.scrollTop = thread.scrollHeight; });
-      if (!ppl.length) cards.chat.querySelector(".hm-people").append(h("button", { class: "hm-pp hm-invite", title: "Invite teammates", text: "+", onclick: e => window.Cloud?.share(e.currentTarget) }));
+      if (!ppl.length) cards.chat.querySelector(".hm-people").append(h("button", { class: "hm-pp", title: "Invite teammates", onclick: e => window.Cloud?.share(e.currentTarget) }, h("span", { class: "hm-pp-av" }, h("span", { class: "hm-invite", text: "+" })), h("small", { text: "Invite" })));
     }
 
     /* ---------- team today ---------- */
