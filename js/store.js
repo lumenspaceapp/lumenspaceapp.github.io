@@ -100,7 +100,7 @@
         try { localStorage.setItem(KEY, JSON.stringify(local)); } catch (e) { console.warn("save failed", e); }
         if (state.cloud && Store.onCloudSave) Store.onCloudSave();
         const el = document.getElementById("savedState");
-        if (el) { el.classList.remove("saving"); el.textContent = "Saved"; }
+        if (el) { el.classList.remove("saving"); if (!state.cloud) el.textContent = "Saved"; }
       };
       immediate ? run() : (saveTimer = setTimeout(run, 350));
     },
