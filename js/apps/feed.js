@@ -56,7 +56,7 @@
         if (!first) el.classList.add("no-anim");
         if (old) { // keep a comment someone is typing on this post
           const was = old.el.querySelector(".fp-cin"), now = el.querySelector(".fp-cin");
-          if (was && now && was.value) { now.value = was.value; if (document.activeElement === was) refocus = now; }
+          if (was && now) { if (was.value) now.value = was.value; if (document.activeElement === was) refocus = now; }
         }
         built.set(p.id, { sig, el });
         return el;
@@ -90,7 +90,13 @@
         }), h("small", { text: `${total} vote${total === 1 ? "" : "s"}` })));
       }
       const cin = h("input", { class: "menu-input fp-cin", placeholder: "Write a comment…" });
-      cin.onkeydown = e => { if (e.key === "Enter" && cin.value.trim()) { Data.arr("feed", p.id, "comments", { by: me, text: cin.value.trim(), at: Date.now() }); if (p.by !== me) Data.notify(p.by, `<b>${esc(Data.me().name)}</b> commented on your post`, "#/app/feed"); cin.value = ""; } };
+      cin.onkeydown = e => {
+        if (e.key !== "Enter" || e.isComposing || !cin.value.trim()) return;
+        e.preventDefault();
+        const text = cin.value.trim(); cin.value = ""; // clear first: saving redraws the post straight away
+        Data.arr("feed", p.id, "comments", { by: me, text, at: Date.now() });
+        if (p.by !== me) Data.notify(p.by, `<b>${esc(Data.me().name)}</b> commented on your post`, "#/app/feed");
+      };
       return h("article", { class: "feed-post glass" + (p.kind === "announce" ? " announce" : ""), style: { animationDelay: Math.min(i * 40, 300) + "ms" } },
         h("div", { class: "fp-head" }, Apps.avatar(author, 38), h("div", { class: "grow" }, h("b", { text: author.name }), h("div", { class: "app-sub", text: UI.timeAgo(p.at) + (p.kind === "poll" ? " · Poll" : "") })),
           p.by === me ? h("button", { class: "icon-btn xs", html: UI.icon("dots"), onclick: e => UI.menu(e.currentTarget, [

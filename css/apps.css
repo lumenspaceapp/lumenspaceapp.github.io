@@ -291,3 +291,10 @@
 .nt-lead { width: 26px; height: 26px; flex: none; border-radius: 8px; display: grid; place-items: center; font-size: 14px; background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .nt-done { flex: none; width: 26px; height: 26px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--muted); font-size: 13px; font-weight: 700; cursor: pointer; display: grid; place-items: center; }
 .nt-done:hover { background: var(--c-green, #22c55e); border-color: transparent; color: #fff; }
+.nt-panel { padding: 4px 6px 6px; }
+.nt-panel .menu-sec { padding-left: 4px; padding-right: 4px; }
+.nt-panel .mi.notif { padding: 10px 11px; border-radius: 12px; gap: 11px; }
+.nt-panel .mi.notif + .mi.notif { margin-top: 5px; }
+.nt-panel .mi.notif .nt { gap: 3px; }
+.nt-panel .nt-group { margin: 12px 6px 6px; }
+.nt-panel .nt-group:first-of-type { margin-top: 4px; }
