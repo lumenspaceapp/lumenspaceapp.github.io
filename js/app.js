@@ -142,7 +142,7 @@
     if (id !== "home" && (!p || p.deleted)) { if (p?.deleted) UI.toast("That page is in the trash"); id = "home"; history.replaceState(null, "", "#/p/home"); }
     App.currentId = id;
     document.getElementById("scroller").scrollTop = 0;
-    if (id === "home") { Page.renderHome(); document.title = "Home · Lumen"; document.body.classList.remove("show-outline"); }
+    if (id === "home") { window.Apps?.reg.home ? Apps.render("home") : Page.renderHome(); document.title = "Home · Lumen"; document.body.classList.remove("show-outline"); }
     else { Sidebar.expandTo(id); Store.visit(id); Page.renderPage(Store.page(id)); }
     Sidebar.render(); App.refreshCrumbs(); App.syncTopbar();
     window.Cloud?.here?.(); window.Cloud?.renderPresence?.();

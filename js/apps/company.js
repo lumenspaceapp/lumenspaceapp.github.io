@@ -110,6 +110,7 @@
   }
 
   Apps.register("company", { title: "Company & HR", icon: "🏢", render });
+  Apps.Company = { clock, state, worked, hm, entryId, ABS, today: () => Data.get("timelog", entryId(Data.me().key, Apps.today())) };
   Apps.onWorkspace.add(startPill);
   setTimeout(startPill, 0);
 })();

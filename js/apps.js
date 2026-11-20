@@ -20,7 +20,7 @@
     v.append(root);
     v.classList.remove("enter"); void v.offsetWidth; v.classList.add("enter");
     cleanup = def.render(root, arg ? decodeURIComponent(arg) : "") || null;
-    const banner = soloBanner(); if (banner) root.prepend(banner);
+    const banner = def.noBanner ? null : soloBanner(); if (banner) root.prepend(banner);
     document.title = def.title + " · Lumen";
     renderNav();
   };
@@ -57,7 +57,7 @@
     }
     box.innerHTML = "";
     order.forEach(n => {
-      const d = reg[n];
+      const d = reg[n]; if (d.hidden) return;
       box.append(h("div", { class: "tree-row" + (current === n ? " active" : ""), dataset: { app: n }, onclick: () => { Apps.go(n); if (innerWidth < 760) App.toggleSidebar(false); } },
         h("span", { class: "p-icon", text: d.icon }), h("span", { class: "p-title", text: d.title }), h("span", { class: "count", text: badges[n] || "" })));
     });

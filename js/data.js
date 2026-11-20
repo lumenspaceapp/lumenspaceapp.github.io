@@ -84,7 +84,7 @@
       return (Cloud.ws.members || []).map(email => {
         const p = profiles[email] || {}, o = online[email] || {};
         const self = email === me.key;
-        return { key: email, email, name: p.name || o.name || email.split("@")[0], photo: p.photo || o.photo || "", avatar: self ? me.avatar : (p.avatar ?? o.avatar ?? ""), title: p.title || "", dept: p.dept || "", phone: p.phone || "", about: p.about || "",
+        return { key: email, email, name: p.name || o.name || email.split("@")[0], photo: p.photo || o.photo || "", avatar: self ? me.avatar : (p.avatar ?? o.avatar ?? ""), title: p.title || "", dept: p.dept || "", phone: p.phone || "", about: p.about || "", birthday: p.birthday || "",
           online: !!o.at && Date.now() - (o.at.toMillis?.() || 0) < 70000 };
       });
     },
