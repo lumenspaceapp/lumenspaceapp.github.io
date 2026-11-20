@@ -286,3 +286,13 @@ body.show-outline #outline { transform: none; opacity: 1; }
   .page-title { font-size: 32px; }
   #outline { display: none; }
 }
+
+/* ===== Sharing: account + presence ===== */
+.av-img { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; flex-shrink: 0; display: inline-grid; place-items: center; }
+.av-letter { background: linear-gradient(135deg, var(--accent), #ec4899); color: #fff; font-size: 11px; font-weight: 700; }
+.sb-item.account span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.presence { display: flex; align-items: center; margin-right: 8px; padding-left: 8px; }
+.presence .av { margin-left: -8px; border-radius: 50%; cursor: pointer; border: 2px solid var(--glass-strong); display: grid; animation: pop .35s var(--spring); transition: transform .25s var(--spring); }
+.presence .av:hover { transform: translateY(-2px) scale(1.12); z-index: 1; }
+.presence .av .av-img { width: 24px; height: 24px; font-size: 12px; }
+.presence .av.here { box-shadow: 0 0 0 2px var(--accent); }

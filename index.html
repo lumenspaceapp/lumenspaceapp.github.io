@@ -55,6 +55,7 @@
       <div class="sb-foot">
         <button class="sb-item" data-action="templates"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>Templates</span></button>
         <button class="sb-item" data-action="trash"><svg class="ico" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg><span>Trash</span><span class="count" id="trashCount"></span></button>
+        <button class="sb-item account" id="accountBtn" style="display:none"></button>
         <button class="sb-item theme-toggle" data-action="theme"><svg class="ico" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><span>Toggle theme</span></button>
       </div>
       <div class="sb-resizer" id="sbResizer"></div>
@@ -67,6 +68,7 @@
         </button>
         <div id="breadcrumbs"></div>
         <div class="tb-right">
+          <div class="presence" id="presence"></div>
           <span class="saved" id="savedState">Saved</span>
           <button class="tb-btn" id="shareBtn">Share</button>
           <button class="icon-btn" id="outlineBtn" title="Outline"><svg class="ico" viewBox="0 0 24 24"><path d="M4 6h10M4 12h16M4 18h8"/></svg></button>
@@ -92,6 +94,8 @@
   <script src="js/database.js"></script>
   <script src="js/page.js"></script>
   <script src="js/palette.js"></script>
+  <script src="js/firebase-config.js"></script>
   <script src="js/app.js"></script>
+  <script type="module" src="js/cloud.js"></script>
 </body>
 </html>

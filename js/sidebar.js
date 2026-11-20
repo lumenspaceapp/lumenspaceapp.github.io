@@ -89,7 +89,7 @@
     favs.forEach(p => fav.append(row(p, 0, true)));
     const t = Object.values(s.pages).filter(p => p.deleted).length;
     document.getElementById("trashCount").textContent = t || "";
-    document.getElementById("wsName").textContent = s.settings.wsName;
+    document.getElementById("wsName").textContent = Store.getName();
     justOpened = null;
   }
 

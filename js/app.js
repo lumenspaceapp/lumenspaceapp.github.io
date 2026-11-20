@@ -25,7 +25,7 @@
       else if (App.currentId && Store.page(App.currentId)) Editor.render();
     },
     copyLink(id) {
-      const url = location.href.split("#")[0] + "#/p/" + id;
+      const url = window.Cloud?.ws ? Cloud.linkFor(id) : location.href.split("#")[0] + "#/p/" + id;
       navigator.clipboard?.writeText(url).then(() => UI.toast("🔗 Link copied"), () => UI.toast(url));
     },
     toggleFav() {
@@ -65,11 +65,62 @@
       UI.toast(on ? "🎯 Focus mode on — Ctrl+\\ to bring the sidebar back" : "Focus mode off");
     },
     settings,
+
+    /* ----- shared workspaces ----- */
+    booted: false,
+    bootLocal() { if (!App.booted) boot(); },
+    onWorkspaceChange(pageId) {
+      App.booted = true;
+      const target = pageId && Store.page(pageId) ? pageId : (Store.state.recent?.[0] && Store.page(Store.state.recent[0]) ? Store.state.recent[0] : "home");
+      if (location.hash !== "#/p/" + target) history.replaceState(null, "", "#/p/" + target);
+      applySettings(); App.currentId = null; route();
+    },
+    remoteUpdate({ pages, tree }) {
+      if (tree) Sidebar.render();
+      App.refreshCrumbs(); App.syncTopbar();
+      const cur = App.currentId;
+      if (!cur || cur === "home") return;
+      const p = Store.page(cur);
+      if (!p || p.deleted) { UI.toast("This page was removed by a collaborator"); return App.go("home"); }
+      if (pages?.includes(cur)) App.refreshPage();
+    },
+    refreshPage() {
+      clearTimeout(refreshTimer);
+      const p = Store.page(App.currentId); if (!p || App.currentId === "home") return;
+      // don't yank menus, side panels or the slash menu out from under the user; retry shortly
+      if (document.querySelector("#layer .pop, #layer .peek, #layer .backdrop") || EditorMenus.isSlashOpen()) { refreshTimer = setTimeout(App.refreshPage, 1200); return; }
+      const v = document.getElementById("view"), sc = document.getElementById("scroller"), ae = document.activeElement, top = sc.scrollTop;
+      let restore = null;
+      if (ae && v.contains(ae)) {
+        const bc = ae.closest(".block-content:not(.toggle-body):not(.caption)");
+        if (bc && !bc.closest(".t-database")) { const id = bc.closest(".block").dataset.id, off = Editor.caretOffset(bc); restore = () => { const el = Editor.contentOf(id); el && Editor.setCaret(el, off); }; }
+        else if (ae.classList.contains("page-title")) { const off = Editor.caretOffset(ae); restore = () => { const t = document.querySelector(".page-title"); t && Editor.setCaret(t, off); }; }
+        else { ae.addEventListener("blur", () => { refreshTimer = setTimeout(App.refreshPage, 150); }, { once: true }); return; }
+      }
+      Page.renderPage(p, true); sc.scrollTop = top; restore && restore();
+    },
   };
+  let refreshTimer;
   window.App = App;
 
   function route() {
     UI.closePops();
+    const wsLink = location.hash.match(/^#\/ws\/([^/]+)(?:\/p\/(.+))?$/);
+    if (wsLink) {
+      if (window.Cloud?.ws?.id === wsLink[1]) { history.replaceState(null, "", "#/p/" + (wsLink[2] || "home")); }
+      else if (window.Cloud?.configured) {
+        history.replaceState(null, "", "#/p/home");
+        const [, wsId, pid] = wsLink;
+        if (Cloud.user) Cloud.open(wsId, pid);
+        else {
+          const m = UI.modal("Join a shared workspace", h("div", null,
+            h("p", { style: { marginTop: 0, color: "var(--muted)" }, text: "Sign in with the Google account that was invited to open this workspace." }),
+            h("button", { class: "btn primary", text: "Sign in with Google", onclick: async () => { m.close(); if (await Cloud.signIn()) Cloud.open(wsId, pid); } })));
+          m.el.style.width = "420px";
+        }
+      }
+      else history.replaceState(null, "", "#/p/home");
+    }
     const m = location.hash.match(/^#\/p\/(.+)$/);
     let id = m ? decodeURIComponent(m[1]) : "home";
     const p = Store.page(id);
@@ -79,6 +130,7 @@
     if (id === "home") { Page.renderHome(); document.title = "Home · Lumen"; document.body.classList.remove("show-outline"); }
     else { Sidebar.expandTo(id); Store.visit(id); Page.renderPage(Store.page(id)); }
     Sidebar.render(); App.refreshCrumbs(); App.syncTopbar();
+    window.Cloud?.here?.(); window.Cloud?.renderPresence?.();
   }
 
   function applySettings() {
@@ -103,8 +155,8 @@
     const blur = h("input", { type: "range", min: 0, max: 60, value: s.blur });
     blur.addEventListener("input", () => { s.blur = +blur.value; applySettings(); Store.save(); });
     const motion = h("span", { class: "switch" + (s.motion ? " on" : ""), style: { cursor: "pointer" }, onclick: () => { s.motion = !s.motion; motion.classList.toggle("on", s.motion); applySettings(); Store.save(); } });
-    const ws = h("input", { class: "menu-input", value: s.wsName, style: { width: "200px", margin: 0 } });
-    ws.addEventListener("input", () => { s.wsName = ws.value || "My Workspace"; Store.save(); Sidebar.render(); });
+    const ws = h("input", { class: "menu-input", value: Store.getName(), style: { width: "200px", margin: 0 } });
+    ws.addEventListener("input", () => { Store.setName(ws.value || "My Workspace"); Sidebar.render(); });
     const file = h("input", { type: "file", accept: ".json", style: { display: "none" } });
     file.addEventListener("change", () => { const f = file.files[0]; if (!f) return; f.text().then(t => { try { Store.importAll(t); m.close(); boot(); UI.toast("Workspace imported"); } catch (e) { UI.toast("Import failed: " + e.message); } }); });
     const body = h("div", null,
@@ -152,14 +204,17 @@
     document.getElementById("outlineBtn").onclick = App.toggleOutline;
     document.getElementById("pageMenuBtn").onclick = e => Page.pageMenu(e.currentTarget);
     document.getElementById("shareBtn").onclick = e => {
+      if (window.Cloud?.ws) return Cloud.share(e.currentTarget);
       const p = Store.page(App.currentId);
       UI.menu(e.currentTarget, [{ section: "Share" },
         { label: "Copy link", icon: "link", onClick: () => App.copyLink(p.id) },
+        { label: "Share with friends…", icon: "plus", onClick: () => window.Cloud ? Cloud.share(e.currentTarget) : UI.toast("Sharing is still loading") },
         { label: "Copy as Markdown", icon: "copy", onClick: () => { navigator.clipboard?.writeText(Page.toMd(p)); UI.toast("Markdown copied"); } },
-        { el: h("div", { class: "menu-empty", style: { maxWidth: "240px", fontSize: "12px" }, text: "Pages live in this browser only. Use Settings → Backup to move them to another device." }) }], { align: "end" });
+        { el: h("div", { class: "menu-empty", style: { maxWidth: "240px", fontSize: "12px" }, text: "This workspace is private to this browser. Share with friends to move it into a shared workspace everyone can edit live." }) }], { align: "end" });
     };
     document.getElementById("wsSwitch").onclick = e => UI.menu(e.currentTarget, [
-      { section: Store.state.settings.wsName }, { label: "Settings", icon: "dots", onClick: settings }, { label: "Templates", icon: "gallery", onClick: Page.templatesModal }, { label: "Trash", icon: "trash", onClick: Page.trashModal }]);
+      ...(window.Cloud ? Cloud.workspaceMenuItems() : []), { sep: true },
+      { label: "Settings", icon: "dots", onClick: settings }, { label: "Templates", icon: "gallery", onClick: Page.templatesModal }, { label: "Trash", icon: "trash", onClick: Page.trashModal }]);
     const scroller = document.getElementById("scroller");
     scroller.addEventListener("scroll", () => document.getElementById("main").classList.toggle("scrolled", scroller.scrollTop > 4), { passive: true });
     document.getElementById("view").addEventListener("input", e => { if (e.target.closest(".blocks")) document.querySelector(".tpl-pick")?.remove(); });
@@ -170,9 +225,15 @@
     Sidebar.initResizer();
   }
 
-  function boot() { applySettings(); App.currentId = null; route(); }
+  function boot() { App.booted = true; applySettings(); App.currentId = null; route(); }
 
   bindShell();
   if (innerWidth < 760) S().sbOpen = false;
-  boot();
+  applySettings();
+  // If a shared workspace will open (last used, or an invite link), wait for cloud.js instead of flashing the private one.
+  const cloudPending = window.FIREBASE_CONFIG?.apiKey && (localStorage.getItem("lumen-active-ws") || location.hash.startsWith("#/ws/"));
+  if (cloudPending) {
+    document.getElementById("view").innerHTML = '<div class="big-empty" style="padding-top:30vh"><div>👥</div>Opening shared workspace…</div>';
+    setTimeout(() => App.bootLocal(), 8000);
+  } else boot();
 })();

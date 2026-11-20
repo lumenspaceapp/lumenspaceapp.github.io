@@ -159,7 +159,7 @@
     animIds.clear(); firstPaint = false;
     App.updateOutline();
   }
-  function mount(el, p) { page = p; root = el; firstPaint = true; render(); bind(); }
+  function mount(el, p, quiet) { page = p; root = el; firstPaint = !quiet; render(); bind(); }
 
   /* ---------- markdown shortcuts ---------- */
   const SHORTCUTS = [

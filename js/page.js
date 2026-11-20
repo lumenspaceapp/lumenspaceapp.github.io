@@ -3,7 +3,7 @@
   const { h, icon, esc } = UI;
   const view = () => document.getElementById("view");
 
-  function renderPage(p) {
+  function renderPage(p, quiet) {
     const v = view(); v.innerHTML = "";
     const pageEl = h("div", { class: "page" + (p.fullWidth ? " full" : "") + (p.smallText ? " small" : "") + (p.font !== "default" ? " f-" + p.font : "") });
     const wrap = h("div", { class: p.cover ? "has-cover" : "" });
@@ -34,7 +34,7 @@
 
     const blocks = h("div", { class: "blocks" });
     pageEl.append(blocks);
-    Editor.mount(blocks, p);
+    Editor.mount(blocks, p, quiet);
     if (!p.locked) {
       const add = h("div", { class: "add-below", html: icon("plus") + "Click to add a block" });
       add.addEventListener("click", () => {
@@ -52,8 +52,8 @@
       pageEl.append(tp);
     }
     v.append(pageEl);
-    v.classList.remove("enter"); void v.offsetWidth; v.classList.add("enter");
-    if (p.fresh) setTimeout(() => title.focus(), 60);
+    if (!quiet) { v.classList.remove("enter"); void v.offsetWidth; v.classList.add("enter"); }
+    if (p.fresh && !quiet) setTimeout(() => title.focus(), 60);
   }
   function setIcon(p, em) { p.icon = em; Store.touch(p.id); Sidebar.render(); App.refreshCrumbs(); renderPage(p); }
   function toggleLock(p) { p.locked = !p.locked; Store.touch(p.id); renderPage(p); UI.toast(p.locked ? "🔒 Page locked" : "🔓 Page unlocked"); }

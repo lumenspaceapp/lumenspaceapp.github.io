@@ -81,8 +81,11 @@
     return s;
   }
 
-  let state;
-  try { state = JSON.parse(localStorage.getItem(KEY)) || seed(); } catch { state = seed(); }
+  // `local` is the browser-only workspace (always persisted to localStorage, and owns the settings).
+  // `state` is the active workspace: `local`, or a shared cloud workspace that cloud.js swaps in.
+  let local;
+  try { local = JSON.parse(localStorage.getItem(KEY)) || seed(); } catch { local = seed(); }
+  let state = local;
 
   let saveTimer;
   const listeners = new Set();
@@ -94,7 +97,8 @@
       clearTimeout(saveTimer);
       document.getElementById("savedState")?.classList.add("saving");
       const run = () => {
-        try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { console.warn("save failed", e); }
+        try { localStorage.setItem(KEY, JSON.stringify(local)); } catch (e) { console.warn("save failed", e); }
+        if (state.cloud && Store.onCloudSave) Store.onCloudSave();
         const el = document.getElementById("savedState");
         if (el) { el.classList.remove("saving"); el.textContent = "Saved"; }
       };
@@ -167,8 +171,15 @@
     visit(id) { state.recent = [id, ...(state.recent || []).filter(x => x !== id)].slice(0, 12); Store.save(); },
     plainText(html) { const d = document.createElement("div"); d.innerHTML = html || ""; return d.textContent || ""; },
     exportAll() { return JSON.stringify(state, null, 2); },
-    importAll(json) { const s = JSON.parse(json); if (!s.pages || !s.root) throw new Error("Invalid file"); state = s; Store.save(true); },
-    reset() { state = seed(); Store.save(true); },
+    importAll(json) { const s = JSON.parse(json); if (!s.pages || !s.root) throw new Error("Invalid file"); s.settings = local.settings; local = state = s; Store.save(true); },
+    reset() { const keep = local.settings; local = state = seed(); local.settings = keep; Store.save(true); },
+    // cloud workspace support
+    get local() { return local; },
+    get isCloud() { return !!state.cloud; },
+    useCloud(ws) { state = ws ? Object.assign(ws, { cloud: true, settings: local.settings, recent: ws.recent || [] }) : local; },
+    getName() { return state.cloud ? state.name : local.settings.wsName; },
+    setName(n) { if (state.cloud) state.name = n; else local.settings.wsName = n; Store.save(); },
+    seedPages() { return seed(); },
   };
   window.Store = Store;
 })();
