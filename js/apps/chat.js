@@ -4,7 +4,7 @@
   const REACT = ["👍", "❤️", "😂", "🎉", "😮", "👀"];
   const readKey = () => "lumen-chat-read-" + (window.Cloud?.ws?.id || "local");
   const lastRead = () => { try { return JSON.parse(localStorage.getItem(readKey())) || {}; } catch { return {}; } };
-  const markRead = ch => { const r = lastRead(); r[ch] = Date.now(); localStorage.setItem(readKey(), JSON.stringify(r)); };
+  const markRead = ch => { const r = lastRead(); r[ch] = Date.now(); localStorage.setItem(readKey(), JSON.stringify(r)); dispatchEvent(new Event("lumen-chat-read")); };
   const dmId = (a, b) => "dm:" + [a, b].sort().join("|");
   const linkify = s => esc(s).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>').replace(/@(\w[\w.-]*)/g, '<span class="mention-at">@$1</span>');
 

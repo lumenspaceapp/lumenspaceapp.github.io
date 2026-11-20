@@ -119,7 +119,7 @@
         if (ch !== "general") { const other = ch.slice(3).split("|").find(k => k !== m); Data.notify(other, `💬 <b>${esc(me().name)}</b>: ${esc(text.slice(0, 80))}`, "#/app/chat/" + encodeURIComponent(ch)); }
       };
       // reading it here counts as read
-      const rr = lastRead(); rr[ch] = Date.now(); localStorage.setItem(readKey(), JSON.stringify(rr));
+      const rr = lastRead(); rr[ch] = Date.now(); localStorage.setItem(readKey(), JSON.stringify(rr)); dispatchEvent(new Event("lumen-chat-read"));
       cards.chat.replaceChildren(card("hm-chat", "Quick chat", "💬", link("Open chat →", () => Apps.go("chat", ch === "general" ? "" : ch)), people, h("div", { class: "hm-chat-with", text: chName }), thread, input));
       setTimeout(() => { thread.scrollTop = thread.scrollHeight; });
       if (!ppl.length) cards.chat.querySelector(".hm-people").append(h("button", { class: "hm-pp", title: "Invite teammates", onclick: e => window.Cloud?.share(e.currentTarget) }, h("span", { class: "hm-pp-av" }, h("span", { class: "hm-invite", text: "+" })), h("small", { text: "Invite" })));

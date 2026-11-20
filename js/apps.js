@@ -68,28 +68,82 @@
   function initBell() {
     const bell = h("button", { class: "icon-btn bell", id: "bellBtn", title: "Notifications", html: `<svg class="ico" viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span class="dot"></span>` });
     document.querySelector(".tb-right").prepend(bell);
-    let mine = [];
-    let unsub = null;
-    const watch = () => {
-      unsub && unsub();
-      unsub = Data.on("notifications", all => {
-        const me = Data.me().key;
-        mine = all.filter(n => n.to === me).sort((a, b) => b.at - a.at);
-        const unread = mine.filter(n => !n.read).length;
-        bell.querySelector(".dot").textContent = unread > 9 ? "9+" : unread || "";
-        bell.classList.toggle("has", unread > 0);
+    const readKey = () => "lumen-chat-read-" + (window.Cloud?.ws?.id || "local");
+    const chatRead = () => { try { return JSON.parse(localStorage.getItem(readKey())) || {}; } catch { return {}; } };
+    let mine = [], todo = [], box = null;
+
+    /* things still waiting for you: they stay until you act (read the chat, finish the task) */
+    function attention() {
+      const me = Data.me().key, out = [], r = chatRead(), byCh = {};
+      Data.list("chat").forEach(m => {
+        if (m.by === me || !m.channel || (m.at || 0) <= (r[m.channel] || 0)) return;
+        if (m.channel.startsWith("dm:") && !m.channel.slice(3).split("|").includes(me)) return;
+        (byCh[m.channel] ||= []).push(m);
       });
+      Object.entries(byCh).forEach(([ch, ms]) => {
+        ms.sort((a, b) => b.at - a.at);
+        const last = ms[0], who = Data.person(last.by), dm = ch.startsWith("dm:"), n = ms.length > 99 ? "99+" : ms.length, s = ms.length === 1 ? "" : "s";
+        const chName = "#" + ((Data.list("channels").find(c => c.id === ch) || {}).name || ch);
+        out.push({ kind: "chat", ch, at: last.at, person: who, title: dm ? `${n} unread message${s} from ${who.name}` : `${n} new message${s} in ${chName}`,
+          sub: (dm ? "" : who.name + ": ") + (last.kind === "call" ? "📹 Video call" : String(last.text || "")), link: "#/app/chat/" + encodeURIComponent(ch) });
+      });
+      out.sort((a, b) => b.at - a.at);
+      const day = today();
+      Data.list("tasks").filter(t => t.status !== "done" && t.deadline && t.deadline <= day && (t.assignee === me || (!t.assignee && t.by === me)))
+        .sort((a, b) => a.deadline.localeCompare(b.deadline))
+        .forEach(t => out.push({ kind: "task", id: t.id, icon: t.deadline < day ? "⏰" : "✅", late: t.deadline < day, title: t.title || "Untitled task",
+          sub: t.deadline < day ? "Overdue · was due " + fmtDate(t.deadline) : "Due today", link: "#/app/tasks/" + t.id }));
+      return out;
+    }
+    function count() {
+      todo = attention();
+      const n = todo.length + mine.filter(x => !x.read).length;
+      bell.querySelector(".dot").textContent = n > 9 ? "9+" : n || "";
+      bell.classList.toggle("has", n > 0);
+      bell.title = n ? `Notifications (${n})` : "Notifications";
+      if (box?.isConnected) fill();
+    }
+    let offs = [];
+    const watch = () => {
+      offs.forEach(f => f());
+      offs = [
+        Data.on("notifications", all => { const me = Data.me().key; mine = all.filter(x => x.to === me).sort((a, b) => b.at - a.at); count(); }),
+        Data.on("chat", count), Data.on("tasks", count), Data.on("channels", count),
+      ];
     };
+    addEventListener("lumen-chat-read", count);
+    addEventListener("storage", e => { if (e.key?.startsWith("lumen-chat-read-")) count(); }); // read in another tab
+    setInterval(count, 60000); // a new day turns tasks "due today"
     Apps.rewatch = () => { watch(); Apps.onWorkspace.forEach(fn => fn()); };
     watch();
-    bell.onclick = () => {
-      const items = mine.slice(0, 20).map(n => h("button", { class: "mi notif" + (n.read ? "" : " unread"), onclick: () => { Data.update("notifications", n.id, { read: true }); UI.closePops(); if (n.link) location.hash = n.link; } },
+
+    function markAllRead() {
+      mine.filter(x => !x.read).forEach(x => Data.update("notifications", x.id, { read: true }));
+      const r = chatRead(); todo.filter(x => x.kind === "chat").forEach(x => { r[x.ch] = Date.now(); });
+      try { localStorage.setItem(readKey(), JSON.stringify(r)); } catch {}
+      dispatchEvent(new Event("lumen-chat-read"));
+    }
+    function fill() {
+      const go = link => { UI.closePops(); if (link) location.hash = link; };
+      const attn = todo.map(x => h("div", { class: "mi notif attn" + (x.late ? " late" : ""), role: "button", tabindex: 0, onclick: () => go(x.link), onkeydown: e => { if (e.key === "Enter") go(x.link); } },
+        x.person ? avatar(x.person, 26) : h("span", { class: "nt-lead", text: x.icon }),
+        h("span", { class: "nt" }, h("span", { class: "nt-t", text: x.title }), h("small", { text: x.sub })),
+        x.kind === "task" ? h("button", { class: "nt-done", title: "Mark done", "aria-label": "Mark task done", html: "✓", onclick: e => { e.stopPropagation(); Data.update("tasks", x.id, { status: "done", completedAt: Date.now() }); UI.toast("✅ Task done"); } }) : null));
+      const recent = mine.slice(0, 20).map(n => h("button", { class: "mi notif" + (n.read ? "" : " unread"), onclick: () => { Data.update("notifications", n.id, { read: true }); go(n.link); } },
         avatar(Data.person(n.by), 26), h("span", { class: "nt" }, h("span", { html: n.text }), h("small", { text: UI.timeAgo(n.at) }))));
-      const box = h("div", { style: { width: "340px" } }, h("div", { class: "menu-sec", style: { display: "flex", justifyContent: "space-between" } }, "Notifications",
-        mine.some(n => !n.read) ? h("a", { style: { cursor: "pointer", textTransform: "none", color: "var(--accent)" }, text: "Mark all read", onclick: () => { mine.filter(n => !n.read).forEach(n => Data.update("notifications", n.id, { read: true })); UI.closePops(); } }) : null),
-        ...(items.length ? items : [h("div", { class: "menu-empty", text: "You're all caught up ✨" })]),
+      const anyUnread = mine.some(n => !n.read) || todo.some(x => x.kind === "chat");
+      box.replaceChildren(
+        h("div", { class: "menu-sec", style: { display: "flex", justifyContent: "space-between" } }, "Notifications",
+          anyUnread ? h("a", { style: { cursor: "pointer", textTransform: "none", color: "var(--accent)" }, text: "Mark all read", onclick: markAllRead }) : null),
+        ...(attn.length ? [h("div", { class: "nt-group", text: "Needs your attention" }), ...attn] : []),
+        ...(recent.length ? [attn.length ? h("div", { class: "nt-group", text: "Recent" }) : null, ...recent] : []),
+        ...(!attn.length && !recent.length ? [h("div", { class: "menu-empty", text: "You're all caught up ✨" })] : []),
         window.Notify && Notify.perm() === "default" ? h("div", { class: "nt-bell-ask" }, h("span", { text: "🔔 Get notified on this device, even in the background" }),
           h("button", { class: "btn primary", text: "Turn on", onclick: () => { UI.closePops(); Notify.enable(); } })) : null);
+    }
+    bell.onclick = () => {
+      count();
+      box = h("div", { class: "nt-panel" }); fill();
       UI.popover(bell, box, { align: "end" });
     };
   }
