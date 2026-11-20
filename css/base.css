@@ -12,8 +12,9 @@
   --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
 
   --bg: #e9ecf6;
-  --glass: rgba(255, 255, 255, .52);
-  --glass-strong: rgba(255, 255, 255, .80);
+  --ga: .52; /* panel opacity, set from Settings → Glass transparency */
+  --glass: rgba(255, 255, 255, var(--ga));
+  --glass-strong: rgba(255, 255, 255, min(.95, calc(var(--ga) + .28)));
   --glass-border: rgba(255, 255, 255, .65);
   --line: rgba(20, 24, 40, .08);
   --text: #1d2130;
@@ -35,8 +36,8 @@
 }
 :root[data-theme="dark"] {
   --bg: #090a12;
-  --glass: rgba(24, 26, 38, .55);
-  --glass-strong: rgba(30, 32, 46, .86);
+  --glass: rgba(24, 26, 38, var(--ga));
+  --glass-strong: rgba(30, 32, 46, min(.95, calc(var(--ga) + .31)));
   --glass-border: rgba(255, 255, 255, .08);
   --line: rgba(255, 255, 255, .08);
   --text: #e7e8f0;
@@ -74,7 +75,7 @@ input, textarea, select { font: inherit; color: inherit; }
 .aurora { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
 .blob {
   position: absolute; width: 46vmax; height: 46vmax; border-radius: 50%;
-  filter: blur(80px); opacity: .55; mix-blend-mode: normal;
+  filter: blur(56px); opacity: .55; mix-blend-mode: normal;
   animation: float 26s var(--ease) infinite alternate;
 }
 .b1 { background: var(--blob1); top: -14vmax; left: -10vmax; }
@@ -90,7 +91,23 @@ input, textarea, select { font: inherit; color: inherit; }
   position: absolute; inset: 0; opacity: .05;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
-body.no-motion .blob { animation: none; }
+/* detail behind the glass, so the blur setting is visible: a dot grid and a few crisp floating orbs */
+.dots { position: absolute; inset: -40px; opacity: .55;
+  background-image: radial-gradient(circle, rgba(70, 60, 150, .28) 1.3px, transparent 1.6px); background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse at 50% 40%, #000 30%, transparent 85%); mask-image: radial-gradient(ellipse at 50% 40%, #000 30%, transparent 85%); }
+:root[data-theme="dark"] .dots { background-image: radial-gradient(circle, rgba(255, 255, 255, .16) 1.3px, transparent 1.6px); }
+.orb { position: absolute; border-radius: 50%; animation: drift 40s ease-in-out infinite alternate;
+  background: radial-gradient(circle at 30% 28%, rgba(255,255,255,.9), rgba(255,255,255,0) 32%), linear-gradient(135deg, var(--c1), var(--c2));
+  box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.55), 0 20px 50px -18px var(--c2); opacity: .85; }
+.o1 { --c1: #a78bfa; --c2: #f472b6; width: 150px; height: 150px; top: 14%; left: 22%; }
+.o2 { --c1: #60a5fa; --c2: #8b5cf6; width: 90px; height: 90px; top: 62%; left: 12%; animation-duration: 46s; animation-delay: -10s; }
+.o3 { --c1: #5eead4; --c2: #3b82f6; width: 120px; height: 120px; top: 22%; right: 14%; animation-duration: 52s; animation-delay: -20s; }
+.o4 { --c1: #fbbf24; --c2: #f472b6; width: 64px; height: 64px; bottom: 14%; right: 30%; animation-duration: 38s; animation-delay: -6s; }
+.o5 { --c1: #c084fc; --c2: #60a5fa; width: 200px; height: 200px; bottom: -40px; left: 46%; animation-duration: 60s; animation-delay: -30s; opacity: .6; }
+.ring { position: absolute; border-radius: 50%; border: 2px solid rgba(124, 92, 255, .35); width: 260px; height: 260px; top: 46%; left: 58%; animation: drift 70s ease-in-out infinite alternate-reverse; }
+:root[data-theme="dark"] .orb { opacity: .7; } :root[data-theme="dark"] .ring { border-color: rgba(167, 139, 250, .3); }
+@keyframes drift { 0% { transform: translate(0, 0) rotate(0); } 50% { transform: translate(40px, -30px) rotate(20deg); } 100% { transform: translate(-30px, 40px) rotate(-15deg); } }
+body.no-motion .blob, body.no-motion .orb, body.no-motion .ring { animation: none; }
 body.no-motion * { transition-duration: 0s !important; animation-duration: 0s !important; }
 
 /* ===== Glass ===== */

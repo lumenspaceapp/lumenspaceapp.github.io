@@ -154,6 +154,7 @@
     root.dataset.theme = theme;
     root.style.setProperty("--accent", s.accent);
     root.style.setProperty("--blur", s.blur + "px");
+    if (s.glass != null) root.style.setProperty("--ga", s.glass / 100); else root.style.removeProperty("--ga");
     root.style.setProperty("--sb-w", (s.sbWidth || 268) + "px");
     document.body.classList.toggle("no-motion", !s.motion);
     const tt = document.querySelector(".theme-toggle span"); if (tt) tt.textContent = theme === "dark" ? "Light mode" : "Dark mode";
@@ -167,17 +168,35 @@
     const accents = h("div", { class: "accents" }, ...ACCENTS.map(c => h("button", { class: s.accent === c ? "on" : "", style: { background: c, color: c }, onclick: e => {
       s.accent = c; applySettings(); Store.save(); accents.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === e.currentTarget)); } })));
     const blur = h("input", { type: "range", min: 0, max: 60, value: s.blur });
-    blur.addEventListener("input", () => { s.blur = +blur.value; applySettings(); Store.save(); });
+    const blurVal = h("span", { class: "set-val", text: s.blur + "px" });
+    blur.addEventListener("input", () => { s.blur = +blur.value; blurVal.textContent = s.blur + "px"; applySettings(); Store.save(); });
+    const glassNow = s.glass ?? Math.round(parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ga")) * 100 || 52);
+    const glass = h("input", { type: "range", min: 15, max: 90, value: glassNow });
+    const glassVal = h("span", { class: "set-val", text: (100 - glassNow) + "%" });
+    glass.addEventListener("input", () => { s.glass = +glass.value; glassVal.textContent = (100 - s.glass) + "%"; applySettings(); Store.save(); });
+    // profile: avatar + name, editable any time
+    const me = window.Data ? Data.me() : { name: "You" };
+    const avBox = h("span");
+    const paintAv = () => avBox.replaceChildren(Apps.avatar(Data.me(), 44));
+    paintAv();
+    const nameIn = h("input", { class: "menu-input", value: me.name, style: { width: "180px", margin: 0 }, disabled: !!(window.Cloud?.user), title: window.Cloud?.user ? "Your name comes from your Google account" : "" });
+    nameIn.addEventListener("input", () => { s.userName = nameIn.value || "You"; Data.update("people", "me", { name: s.userName }); Store.save(); });
+    const profile = h("div", { class: "set-row" },
+      h("div", { class: "set-profile" }, avBox, h("div", { class: "grow" }, h("b", { text: "Your profile" }), h("small", { text: window.Cloud?.user ? Cloud.user.email : "Shown on your posts, tasks and messages" }))),
+      h("div", { style: { display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" } }, nameIn,
+        h("button", { class: "btn primary", text: "Change avatar", onclick: async () => { await Apps.chooseAvatar(); paintAv(); } })));
     const motion = h("span", { class: "switch" + (s.motion ? " on" : ""), style: { cursor: "pointer" }, onclick: () => { s.motion = !s.motion; motion.classList.toggle("on", s.motion); applySettings(); Store.save(); } });
     const ws = h("input", { class: "menu-input", value: Store.getName(), style: { width: "200px", margin: 0 } });
     ws.addEventListener("input", () => { Store.setName(ws.value || "My Workspace"); Sidebar.render(); });
     const file = h("input", { type: "file", accept: ".json", style: { display: "none" } });
     file.addEventListener("change", () => { const f = file.files[0]; if (!f) return; f.text().then(t => { try { Store.importAll(t); m.close(); boot(); UI.toast("Workspace imported"); } catch (e) { UI.toast("Import failed: " + e.message); } }); });
     const body = h("div", null,
+      profile,
       row("Workspace name", "Shown at the top of the sidebar", ws),
       row("Appearance", "Light, dark or follow your system", seg("theme", [["light", "Light"], ["dark", "Dark"], ["system", "System"]])),
       row("Accent color", "Used for highlights, checkboxes and buttons", accents),
-      row("Glass blur", "How frosted the panels look", blur),
+      row("Glass blur", "How frosted the panels look", h("span", { class: "set-ctl" }, blur, blurVal)),
+      row("Glass transparency", "How much of the background shows through", h("span", { class: "set-ctl" }, glass, glassVal)),
       row("Animations", "Aurora background and motion effects", motion),
       row("Backup", "Download or restore your whole workspace", h("div", { style: { display: "flex", gap: "6px" } },
         h("button", { class: "btn", text: "Export", onclick: () => { const a = h("a", { href: URL.createObjectURL(new Blob([Store.exportAll()], { type: "application/json" })), download: "lumen-workspace.json" }); document.body.append(a); a.click(); a.remove(); } }),
@@ -188,7 +207,7 @@
         ...[["Search / commands", "Ctrl K"], ["New page", "Ctrl Alt N"], ["Toggle sidebar", "Ctrl \\"], ["Toggle theme", "Ctrl Shift L"], ["Slash menu", "/"], ["Move block", "Ctrl Shift ↑↓"],
           ["Indent / outdent", "Tab / Shift Tab"], ["Duplicate block", "Ctrl D"], ["Inline code", "Ctrl E"], ["Turn into heading", "Ctrl Alt 1-3"], ["Select block", "Esc"], ["Delete selected block", "Backspace"]]
           .map(([a, k]) => h("div", { style: { display: "flex", justifyContent: "space-between" } }, h("span", { text: a }), h("kbd", { text: k })))));
-    const m = UI.modal("Settings", body);
+    const m = UI.modal("Settings", body, { backdropClass: "clear" }); // keep the page visible so glass changes show live
   }
 
   function shortcuts(e) {

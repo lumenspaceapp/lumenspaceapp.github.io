@@ -105,7 +105,7 @@
       title ? h("div", { class: "modal-head" }, h("span", { text: title }),
         h("button", { class: "icon-btn", html: icon("x"), onclick: () => api.close() })) : null,
       h("div", { class: "modal-body" }, body));
-    const bd = h("div", { class: "backdrop" }, box);
+    const bd = h("div", { class: "backdrop " + (opts.backdropClass || "") }, box);
     bd.addEventListener("mousedown", e => { if (e.target === bd) api.close(); });
     const onKey = e => { if (e.key === "Escape") api.close(); };
     document.addEventListener("keydown", onKey);
