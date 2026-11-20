@@ -1,0 +1,113 @@
+/* ===== Phones & tablets ===== */
+#app { height: 100vh; height: 100dvh; }
+
+/* Touch screens have no hover: keep hover-only controls visible */
+@media (hover: none) {
+  .tree-row .row-acts, .head-acts, .cover-acts, .code-copy, .dt-more, .open-row, .cl-item .icon-btn,
+  .sb-label .icon-btn, .add-below { opacity: 1 !important; }
+  .block:focus-within > .gutter, .block.menu-open > .gutter { opacity: 1; }
+  .msg.tap .msg-acts { opacity: 1; pointer-events: auto; }
+  .tree-row, .sb-item, .mi, .ch, .btn, .icon-btn { -webkit-tap-highlight-color: transparent; }
+}
+
+@media (max-width: 760px) {
+  #app { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  /* stop iOS from zooming into inputs */
+  input, textarea, select, .menu-input, .chat-input, .app-search, .ob-input { font-size: 16px !important; }
+
+  /* top bar: keep the essentials */
+  #topbar { padding: 0 6px; gap: 2px; }
+  #savedState, #outlineBtn, #favBtn, .presence { display: none !important; }
+  #breadcrumbs .crumb, #breadcrumbs .crumb-sep { display: none; }
+  #breadcrumbs .crumb:last-child { display: flex; max-width: 100%; }
+  .tb-btn { padding: 5px 8px; }
+  .work-pill { padding: 3px 7px; font-size: 11px; }
+
+  /* sidebar slides over the content */
+  #sidebar { width: min(300px, 86vw) !important; }
+  body:not(.sb-closed) #main::after { background: rgba(10, 10, 25, .35); backdrop-filter: blur(2px); }
+  .sb-resizer { display: none; }
+
+  /* pages */
+  .page { padding: 0 18px 30vh 32px; }
+  .gutter { left: -30px; } .gutter .add { display: none; }
+  .cover { height: 150px; }
+  .page-icon { font-size: 56px; width: 68px; height: 68px; }
+  .has-cover .page-icon { margin-top: -34px; }
+  .page-title { font-size: 30px; }
+  .t-h1 .block-content { font-size: 1.6em; }
+  .home { padding: 34px 18px; } .home h1 { font-size: 27px; }
+  .cards { grid-template-columns: repeat(2, 1fr); }
+  .db-head { gap: 4px; } .db-views { margin-left: 0; } .db-tools.searching input { width: 110px; }
+
+  /* menus, modals, panels never wider than the screen */
+  .pop { max-width: calc(100vw - 16px); }
+  .pop > div { max-width: 100%; }
+  .emoji-grid { grid-template-columns: repeat(8, 1fr); }
+  .fmt-bar { max-width: calc(100vw - 16px); overflow-x: auto; }
+  .backdrop { padding: 4vh 10px 10px; align-items: flex-start; }
+  .modal { max-width: calc(100vw - 20px) !important; max-height: 90dvh; }
+  .modal-body { padding: 6px 16px 18px; } .modal-head { padding: 16px 16px 6px; }
+  .set-row { flex-direction: column; align-items: flex-start; }
+  .peek, .peek.slider { top: 6px; right: 6px; bottom: 6px; left: 6px; width: auto; }
+  .peek-body { padding: 6px 18px 30px; }
+  .peek-title { font-size: 24px; }
+  .td-grid { grid-template-columns: 100px 1fr; }
+  .palette input { padding: 14px 16px; }
+  #toasts { bottom: calc(14px + env(safe-area-inset-bottom)); width: calc(100vw - 24px); }
+  .toast { max-width: 100%; }
+
+  /* segmented controls & tab rows scroll sideways instead of overflowing */
+  .seg { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .seg button { white-space: nowrap; flex-shrink: 0; }
+  .app-tabs, .seg { scrollbar-width: none; } .app-tabs::-webkit-scrollbar, .seg::-webkit-scrollbar { display: none; }
+
+  /* apps */
+  .app { padding: 20px 14px 70px; }
+  .app-head { gap: 10px; margin-bottom: 12px; }
+  .app-title { min-width: 0; } .app-title h1 { font-size: 23px; }
+  .app-ic { width: 40px; height: 40px; font-size: 20px; }
+  .app-actions { width: 100%; } .app-actions .btn { flex: 1; text-align: center; }
+  .app-search { width: 100%; flex: 1; }
+  .app-banner { padding: 10px 12px; font-size: 13px; gap: 8px; }
+  .counters { gap: 6px; } .counter { padding: 6px 10px; } .counter b { font-size: 16px; }
+  .b-col { width: 78vw; }
+  .proj-grid, .presets, .emp-grid { grid-template-columns: 1fr; }
+  .report { overflow-x: auto; } .tw-grid { min-width: 620px; }
+  .bar-row { grid-template-columns: 90px 1fr 80px; }
+
+  /* chat: channel list becomes a drawer */
+  .app-chat { height: calc(100dvh - 60px); }
+  .chat { position: relative; }
+  .chat-side { display: none; }
+  .chat.show-side .chat-side { display: block; position: absolute; inset: 0; z-index: 3; background: color-mix(in srgb, var(--bg) 94%, transparent); backdrop-filter: blur(24px); border-radius: 12px; padding: 10px 8px; animation: fadeIn .2s; }
+  .chat-menu { display: inline-grid !important; }
+  .chat-head { padding: 10px 12px; gap: 8px; } .chat-head .btn { padding: 6px 10px; font-size: 13px; }
+  .chat-stream { padding: 10px 8px; }
+  .chat-compose { padding: 8px 10px calc(10px + env(safe-area-inset-bottom)); }
+  .msg-acts { right: 4px; }
+
+  /* calendar */
+  .cal-label { min-width: 0; font-size: 16px; }
+  .cal-day { min-height: 62px; padding: 3px; } .cal-chip { font-size: 9.5px; padding: 1px 3px; } .cal-n { font-size: 11px; width: 20px; height: 20px; }
+  .cal-week { grid-template-columns: 1fr; } .cw-col { min-height: 0; }
+
+  /* feed */
+  .feed-compose { padding: 12px; } .poll-edit { margin-left: 0; }
+  .fc-bar .btn.primary { width: 100%; }
+
+  /* drive */
+  .drive-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .d-row { grid-template-columns: 34px 1fr 30px; } .d-row .dt-meta { display: none; }
+
+  /* crm */
+  .crm-summary { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .kpi b { font-size: 18px; }
+  .stage-bar .sb-step { min-width: 60px; font-size: 11px; }
+
+  /* company */
+  .clock-big { font-size: 38px; }
+  .abs-grid { grid-template-columns: 120px repeat(31, 26px) !important; min-width: 0; }
+}
+.chat-menu { display: none !important; }
+@media (max-width: 760px) { .chat-menu { display: inline-grid !important; } }

@@ -58,7 +58,8 @@
     updateOutline: d => Page.updateOutline(d),
     toggleSidebar(force) {
       const open = force ?? document.body.classList.contains("sb-closed");
-      document.body.classList.toggle("sb-closed", !open); S().sbOpen = open; Store.save();
+      document.body.classList.toggle("sb-closed", !open);
+      if (innerWidth >= 760) { S().sbOpen = open; Store.save(); } // on phones the drawer state is temporary
     },
     toggleOutline() { document.body.classList.toggle("show-outline"); Page.updateOutline(); },
     toggleTheme() { S().theme = document.documentElement.dataset.theme === "dark" ? "light" : "dark"; applySettings(); Store.save(); },
@@ -155,7 +156,6 @@
     root.style.setProperty("--blur", s.blur + "px");
     root.style.setProperty("--sb-w", (s.sbWidth || 268) + "px");
     document.body.classList.toggle("no-motion", !s.motion);
-    document.body.classList.toggle("sb-closed", s.sbOpen === false);
     const tt = document.querySelector(".theme-toggle span"); if (tt) tt.textContent = theme === "dark" ? "Light mode" : "Dark mode";
   }
 
@@ -208,6 +208,7 @@
   function bindShell() {
     document.querySelectorAll("[data-action]").forEach(b => b.addEventListener("click", e => {
       const a = b.dataset.action;
+      if (innerWidth < 760 && a !== "theme") App.toggleSidebar(false);
       if (a === "search") Palette.show(); else if (a === "home") App.go("home"); else if (a === "settings") settings();
       else if (a === "new") App.newPage(); else if (a === "trash") Page.trashModal(); else if (a === "templates") Page.templatesModal();
       else if (a === "theme") App.toggleTheme();
@@ -240,12 +241,12 @@
     Sidebar.initResizer();
   }
 
-  function boot() { App.booted = true; applySettings(); App.currentId = null; route(); }
+  const syncSidebar = () => document.body.classList.toggle("sb-closed", innerWidth < 760 || S().sbOpen === false);
+  function boot() { App.booted = true; applySettings(); syncSidebar(); App.currentId = null; route(); }
   window.Apps?.init();
 
   bindShell();
-  if (innerWidth < 760) S().sbOpen = false;
-  applySettings();
+  applySettings(); syncSidebar();
   // If a shared workspace will open (last used, or an invite link), wait for cloud.js instead of flashing the private one.
   const lastWs = localStorage.getItem("lumen-active-ws");
   const cloudPending = window.FIREBASE_CONFIG?.apiKey && ((lastWs && lastWs !== "local") || location.hash.startsWith("#/ws/"));

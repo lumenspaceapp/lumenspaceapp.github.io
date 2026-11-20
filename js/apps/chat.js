@@ -27,9 +27,12 @@
   function render(root, arg) {
     let active = arg || localStorage.getItem("lumen-chat-active") || "general";
     const side = h("div", { class: "chat-side" }), main = h("div", { class: "chat-main" });
-    root.append(h("div", { class: "chat" }, side, main));
+    const chatEl = h("div", { class: "chat" + (arg ? "" : " show-side-first") }, side, main);
+    root.append(chatEl);
+    const isPhone = () => matchMedia("(max-width: 760px)").matches;
+    if (isPhone() && !arg) chatEl.classList.add("show-side"); // on phones, start on the channel list
     const stream = h("div", { class: "chat-stream" });
-    const input = h("textarea", { class: "chat-input", rows: 1, placeholder: "Write a message… (Enter to send, Shift+Enter for a new line)" });
+    const input = h("textarea", { class: "chat-input", rows: 1, placeholder: matchMedia("(max-width: 760px)").matches ? "Message…" : "Write a message… (Enter to send, Shift+Enter for a new line)" });
     const head = h("div", { class: "chat-head" });
     main.append(head, stream, h("div", { class: "chat-compose" },
       h("button", { class: "icon-btn", title: "Emoji", text: "😊", onclick: e => UI.emojiPicker(e.currentTarget, em => { input.value += em; input.focus(); }) }),
@@ -54,7 +57,8 @@
     }
     function drawStream(msgs) {
       const t = title(active);
-      head.replaceChildren(t.person ? Apps.avatar(t.person, 30) : h("span", { class: "ch-big", text: "#" }),
+      head.replaceChildren(h("button", { class: "icon-btn chat-menu", title: "Channels", html: '<svg class="ico" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>', onclick: () => chatEl.classList.add("show-side") }),
+        t.person ? Apps.avatar(t.person, 30) : h("span", { class: "ch-big", text: "#" }),
         h("div", { class: "grow" }, h("b", { text: t.name }), h("div", { class: "app-sub", text: t.desc || (t.person ? (t.person.online ? "🟢 Online" : t.person.title || "Direct message") : "") })),
         h("button", { class: "btn", html: "📹 Video call", title: "Start a video meeting", onclick: call }));
       const list = msgs.filter(m => m.channel === active).sort((a, b) => a.at - b.at);
@@ -78,6 +82,7 @@
           h("div", { class: "msg-acts" }, ...REACT.slice(0, 4).map(em => h("button", { text: em, onclick: () => react(m, em) })),
             mine && !m.kind ? h("button", { title: "Edit", text: "✏️", onclick: () => edit(m) }) : null,
             mine ? h("button", { title: "Delete", text: "🗑️", onclick: async () => { if (await UI.confirm("Delete this message?")) Data.remove("chat", m.id); } }) : null));
+        if (matchMedia("(hover: none)").matches) bubble.addEventListener("click", e => { if (e.target.closest("a,button")) return; const on = !bubble.classList.contains("tap"); stream.querySelectorAll(".msg.tap").forEach(x => x.classList.remove("tap")); bubble.classList.toggle("tap", on); });
         stream.append(bubble); prev = m;
       });
       if (atBottom || list.length !== lastCount) stream.scrollTop = stream.scrollHeight;
@@ -85,7 +90,7 @@
       markRead(active);
     }
     function draw() { const msgs = Data.list("chat"); drawSide(msgs); drawStream(msgs); Apps.badge("chat", Object.values(unreadFor(msgs)).reduce((a, b) => a + b, 0)); }
-    function select(id) { active = id; localStorage.setItem("lumen-chat-active", id); lastCount = -1; draw(); input.focus(); }
+    function select(id) { chatEl.classList.remove("show-side"); active = id; localStorage.setItem("lumen-chat-active", id); lastCount = -1; draw(); if (!isPhone()) input.focus(); }
     function send() {
       const text = input.value.trim(); if (!text) return;
       input.value = ""; input.style.height = "auto";
@@ -118,7 +123,7 @@
     }
 
     const offs = [Data.on("chat", draw), Data.on("channels", draw), Data.on("people", draw)];
-    setTimeout(() => input.focus(), 100);
+    if (!isPhone()) setTimeout(() => input.focus(), 100);
     return () => offs.forEach(f => f());
   }
 
