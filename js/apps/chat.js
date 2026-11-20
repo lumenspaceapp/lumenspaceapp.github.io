@@ -32,7 +32,7 @@
     const isPhone = () => matchMedia("(max-width: 760px)").matches;
     if (isPhone() && !arg) chatEl.classList.add("show-side"); // on phones, start on the channel list
     const stream = h("div", { class: "chat-stream" });
-    const input = h("textarea", { class: "chat-input", rows: 1, placeholder: matchMedia("(max-width: 760px)").matches ? "Message…" : "Write a message… (Enter to send, Shift+Enter for a new line)" });
+    const input = h("textarea", { class: "chat-input", rows: 1, placeholder: matchMedia("(max-width: 760px)").matches ? "Message…" : "Write a message…", title: "Enter to send · Shift+Enter for a new line" });
     const head = h("div", { class: "chat-head" });
     main.append(head, stream, h("div", { class: "chat-compose" },
       h("button", { class: "icon-btn", title: "Emoji", text: "😊", onclick: e => UI.emojiPicker(e.currentTarget, em => { input.value += em; input.focus(); }) }),
@@ -93,7 +93,7 @@
     function select(id) { chatEl.classList.remove("show-side"); active = id; localStorage.setItem("lumen-chat-active", id); lastCount = -1; draw(); if (!isPhone()) input.focus(); }
     function send() {
       const text = input.value.trim(); if (!text) return;
-      input.value = ""; input.style.height = "auto";
+      input.value = ""; input.style.height = "";
       Data.add("chat", { channel: active, text, reactions: {} });
       // @mentions and DMs notify people
       const me = Data.me();

@@ -300,3 +300,11 @@
 .nt-panel .nt-group:first-of-type { margin-top: 4px; }
 .nt-panel .mi.notif .nt-body { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin: 2px 0 1px; padding: 6px 9px; border-radius: 9px; font-size: 12.5px; line-height: 1.4;
   color: var(--text, inherit); background: color-mix(in srgb, var(--glass-strong) 70%, transparent); border-left: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); word-break: break-word; white-space: pre-wrap; }
+
+/* chat composer: emoji, box and Send share one 44px line; the buttons stay at the bottom as the box grows */
+.chat-compose { align-items: flex-end; gap: 10px; }
+.chat-input { box-sizing: border-box; height: 44px; min-height: 44px; padding: 11px 14px; font-size: 14px; line-height: 20px; }
+.chat-compose > .icon-btn, .chat-compose > .btn { flex: none; height: 44px; box-sizing: border-box; }
+.chat-compose > .icon-btn { width: 44px; border-radius: 12px; font-size: 19px; display: grid; place-items: center; padding: 0; }
+.chat-compose > .btn { padding: 0 20px; border-radius: 12px; }
+.chat-input::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
