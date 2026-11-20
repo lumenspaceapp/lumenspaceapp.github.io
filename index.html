@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lumen Notes</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/database.css" />
+</head>
+<body>
+  <!-- Animated aurora behind the glass -->
+  <div class="aurora" aria-hidden="true">
+    <span class="blob b1"></span><span class="blob b2"></span>
+    <span class="blob b3"></span><span class="blob b4"></span>
+    <div class="grain"></div>
+  </div>
+
+  <div id="app">
+    <aside id="sidebar" class="glass">
+      <div class="sb-head">
+        <button class="ws-switch" id="wsSwitch">
+          <span class="ws-logo">L</span>
+          <span class="ws-name" id="wsName">My Workspace</span>
+          <svg class="ico sm" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"/></svg>
+        </button>
+        <button class="icon-btn" id="collapseSidebar" title="Close sidebar (Ctrl+\)">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/></svg>
+        </button>
+      </div>
+
+      <nav class="sb-actions">
+        <button class="sb-item" data-action="search"><svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span>Search</span><kbd>Ctrl K</kbd></button>
+        <button class="sb-item" data-action="home"><svg class="ico" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span>Home</span></button>
+        <button class="sb-item" data-action="settings"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Settings</span></button>
+        <button class="sb-item" data-action="new"><svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>New page</span></button>
+      </nav>
+
+      <div class="sb-scroll">
+        <div class="sb-section" id="favSection">
+          <div class="sb-label">Favorites</div>
+          <div class="tree" id="favTree"></div>
+        </div>
+        <div class="sb-section">
+          <div class="sb-label">Private
+            <button class="icon-btn xs" data-action="new" title="Add a page"><svg class="ico sm" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+          </div>
+          <div class="tree" id="pageTree"></div>
+        </div>
+      </div>
+
+      <div class="sb-foot">
+        <button class="sb-item" data-action="templates"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>Templates</span></button>
+        <button class="sb-item" data-action="trash"><svg class="ico" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg><span>Trash</span><span class="count" id="trashCount"></span></button>
+        <button class="sb-item theme-toggle" data-action="theme"><svg class="ico" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><span>Toggle theme</span></button>
+      </div>
+      <div class="sb-resizer" id="sbResizer"></div>
+    </aside>
+
+    <main id="main" class="glass">
+      <header id="topbar">
+        <button class="icon-btn" id="openSidebar" title="Open sidebar (Ctrl+\)">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+        <div id="breadcrumbs"></div>
+        <div class="tb-right">
+          <span class="saved" id="savedState">Saved</span>
+          <button class="tb-btn" id="shareBtn">Share</button>
+          <button class="icon-btn" id="outlineBtn" title="Outline"><svg class="ico" viewBox="0 0 24 24"><path d="M4 6h10M4 12h16M4 18h8"/></svg></button>
+          <button class="icon-btn" id="favBtn" title="Favorite"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z"/></svg></button>
+          <button class="icon-btn" id="pageMenuBtn" title="More"><svg class="ico" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg></button>
+        </div>
+      </header>
+      <div id="scroller">
+        <div id="view"></div>
+      </div>
+      <aside id="outline" class="glass-strong"></aside>
+    </main>
+  </div>
+
+  <div id="layer"></div>
+  <div id="toasts"></div>
+
+  <script src="js/store.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/sidebar.js"></script>
+  <script src="js/editor.js"></script>
+  <script src="js/editor-menus.js"></script>
+  <script src="js/database.js"></script>
+  <script src="js/page.js"></script>
+  <script src="js/palette.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
