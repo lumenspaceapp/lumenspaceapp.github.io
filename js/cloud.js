@@ -203,8 +203,24 @@ async function create(name, copyLocal) {
 async function invite(email) {
   email = email.trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return UI.toast("Enter a valid email address");
-  try { await fb.updateDoc(wsRef, { members: fb.arrayUnion(email) }); UI.toast(`✉️ ${email} can now open this workspace`); }
-  catch (e) { UI.toast(e.code === "permission-denied" ? "Only the owner can invite people" : e.message); }
+  try { await fb.updateDoc(wsRef, { members: fb.arrayUnion(email) }); sendInviteDialog(email); return true; }
+  catch (e) { UI.toast(e.code === "permission-denied" ? "Only the owner can invite people" : e.message); return false; }
+}
+// The app has no mail server: adding someone only allows them in. This dialog helps send them the link.
+function sendInviteDialog(email) {
+  const ws = Cloud.ws, link = `${location.href.split("#")[0]}#/ws/${ws.id}`;
+  const from = Cloud.user.displayName || "A friend";
+  const subject = `Join "${ws.name}" on Lumen Notes`;
+  const body = `${from} invited you to the shared workspace "${ws.name}".\n\nOpen this link and sign in with Google using ${email}:\n${link}`;
+  const row = h("div", { style: { display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "14px" } },
+    h("a", { class: "btn primary", href: `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, text: "✉️ Email it" }),
+    navigator.share ? h("button", { class: "btn", text: "📤 Share…", onclick: () => navigator.share({ title: subject, text: body }).catch(() => {}) }) : null,
+    h("button", { class: "btn", text: "🔗 Copy link", onclick: e => { navigator.clipboard?.writeText(link); e.currentTarget.textContent = "✓ Copied"; } }));
+  const m = UI.modal("Now send them the invite", h("div", null,
+    h("p", { style: { marginTop: 0, color: "var(--muted)" }, html: `<b>${esc(email)}</b> is now allowed into “${esc(ws.name)}”. Lumen doesn't send emails itself, so send them this link by email, WhatsApp or any chat:` }),
+    h("input", { class: "menu-input", value: link, readonly: true, onclick: e => e.target.select() }),
+    h("p", { style: { color: "var(--muted)", fontSize: "13px", marginBottom: 0 }, text: "They must sign in with Google using exactly this email address." }), row));
+  m.el.style.width = "480px";
 }
 async function removeMember(email) {
   try { await fb.updateDoc(wsRef, { members: fb.arrayRemove(email) }); UI.toast(`Removed ${email}`); } catch (e) { UI.toast(e.message); }
@@ -280,7 +296,7 @@ Cloud.share = async anchor => {
   const items = [{ section: `👥 ${ws.name} · ${ws.members.length} member${ws.members.length === 1 ? "" : "s"}` }];
   if (isOwner) {
     const inp = h("input", { class: "menu-input", placeholder: "Friend's Gmail address, then Enter" });
-    inp.addEventListener("keydown", async e => { if (e.key === "Enter" && inp.value.trim()) { await invite(inp.value); UI.closePops(); Cloud.share(anchor); } });
+    inp.addEventListener("keydown", async e => { if (e.key === "Enter" && inp.value.trim()) { UI.closePops(); await invite(inp.value); } });
     items.push({ el: inp });
     setTimeout(() => inp.focus(), 30);
   }
