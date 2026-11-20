@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Lumen">
+  <defs>
+    <linearGradient id="bg" x1="40" y1="24" x2="472" y2="488" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8b6bff"/>
+      <stop offset=".55" stop-color="#b65cf0"/>
+      <stop offset="1" stop-color="#f0569b"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="150" cy="120" r="300" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff" stop-opacity=".38"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity=".28"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="10"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="118" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="118" fill="url(#glow)"/>
+  <path d="M118 0h276a118 118 0 0 1 118 118v40C400 214 112 214 0 158v-40A118 118 0 0 1 118 0z" fill="url(#sheen)"/>
+  <!-- the L, with a soft glow behind it -->
+  <path d="M178 134v222h152" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="64" stroke-linecap="round" stroke-linejoin="round" filter="url(#soft)"/>
+  <path d="M178 134v222h152" fill="none" stroke="#fff" stroke-width="60" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- spark of light -->
+  <g transform="translate(346 168)">
+    <path d="M0-74C6-24 24-6 74 0 24 6 6 24 0 74-6 24-24 6-74 0-24-6-6-24 0-74z" fill="#fff" filter="url(#soft)" opacity=".7"/>
+    <path d="M0-66C5-22 22-5 66 0 22 5 5 22 0 66-5 22-22 5-66 0-22-5-5-22 0-66z" fill="#fff"/>
+    <circle r="9" fill="#ffe8f6"/>
+  </g>
+</svg>

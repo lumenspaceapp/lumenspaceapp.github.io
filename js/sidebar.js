@@ -91,7 +91,8 @@
     document.getElementById("trashCount").textContent = t || "";
     document.getElementById("wsName").textContent = Store.getName();
     const logo = document.querySelector(".ws-logo"), ic = Store.getIcon();
-    logo.textContent = ic || (Store.getName() || "L").trim()[0].toUpperCase(); logo.classList.toggle("emoji", !!ic);
+    if (ic) { logo.textContent = ic; logo.classList.add("emoji"); logo.classList.remove("brand"); }
+    else { logo.innerHTML = '<img src="assets/logo.svg" alt="">'; logo.classList.add("brand"); logo.classList.remove("emoji"); }
     justOpened = null;
   }
 

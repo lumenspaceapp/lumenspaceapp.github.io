@@ -1,10 +1,12 @@
-# Lumen Notes
+<p align="center"><img src="assets/logo-wordmark.svg" alt="Lumen" width="360"></p>
+
+# Lumen
 
 A Notion-style workspace with frosted-glass panels, an animated gradient background and smooth motion. Plain HTML, CSS and JavaScript — no build step, no install.
 
 ## Use it
 
-Open the live site (GitHub Pages), or open `index.html` locally.
+**Live:** https://lumenspaceapp.github.io/ (install it as an app from your browser's address bar), or open `index.html` locally.
 
 ## Features
 

@@ -254,5 +254,8 @@
     setTimeout(() => App.bootLocal(), 8000);
   } else boot();
   // First visit in this browser (and not arriving from an invite): run the Notion-style setup wizard.
-  if (Store.firstRun && !cloudPending && !/[?&]ws=/.test(location.search)) setTimeout(() => Onboarding.firstRun(), 500);
+  if (Store.firstRun && !cloudPending && location.hash !== "#/migrate" && !/[?&]ws=/.test(location.search)) setTimeout(() => Onboarding.firstRun(), 500);
 })();
+
+// install-as-app + offline support (only on the real https site, not local previews)
+if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});

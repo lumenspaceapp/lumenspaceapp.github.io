@@ -47,7 +47,7 @@
           if (r) { a.name = a.name || Cloud.user?.displayName || ""; opts.accountStep = false; go(at + 1); }
           else { g.disabled = false; g.lastChild.textContent = " Continue with Google"; }
         };
-        return [h("div", { class: "ob-logo" }, "L"),
+        return [h("div", { class: "ob-logo" }, h("img", { src: "assets/logo.svg", alt: "Lumen" })),
           h("h1", { text: "Welcome to Lumen" }),
           h("p", { class: "ob-sub", text: "A calm, glassy home for your notes, tasks and docs. Let's set up a workspace that fits you." }),
           h("div", { class: "ob-col" }, g, h("button", { class: "btn ob-ghost", text: "Use without an account", onclick: () => go(at + 1) })),

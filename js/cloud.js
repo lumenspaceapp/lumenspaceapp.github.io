@@ -12,7 +12,7 @@ let fb, auth, db, unsubs = [], listUnsub = null, synced = {}, syncedRoot = "", s
 function setupModal() {
   UI.modal("Sharing isn't connected yet", h("div", null,
     h("p", { style: { marginTop: 0, color: "var(--muted)" }, text: "Shared workspaces need a free Firebase project. The site owner adds its settings to js/firebase-config.js once; after that everyone can sign in with Google and collaborate." }),
-    h("a", { class: "btn primary", href: "https://github.com/gamerslife1183-bot/lumen-notes/blob/main/SETUP.md", target: "_blank", text: "Open setup guide" })));
+    h("a", { class: "btn primary", href: "https://github.com/lumenspaceapp/lumenspaceapp.github.io/blob/main/SETUP.md", target: "_blank", text: "Open setup guide" })));
 }
 
 if (Cloud.configured) init().catch(e => { console.error(e); UI.toast("Couldn't load sharing: " + e.message); App.bootLocal?.(); });

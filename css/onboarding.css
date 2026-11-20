@@ -93,3 +93,6 @@
 }
 
 .ws-logo.emoji { background: var(--hover); box-shadow: none; font-size: 15px; }
+.ws-logo.brand { background: none; box-shadow: 0 4px 12px -4px #b65cf0; }
+.ws-logo img, .ob-logo img { width: 100%; height: 100%; display: block; }
+.ob-logo { background: none; }

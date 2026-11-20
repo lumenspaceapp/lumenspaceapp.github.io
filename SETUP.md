@@ -11,7 +11,7 @@ Lumen works without any setup: each browser keeps a private workspace. To let fr
 
 1. In the left menu open **Build → Authentication → Get started**.
 2. Under **Sign-in method**, choose **Google**, switch it on, pick a support email and **Save**.
-3. Open the **Settings** tab → **Authorized domains** → **Add domain** and add `gamerslife1183-bot.github.io` (your GitHub Pages domain).
+3. Open the **Settings** tab → **Authorized domains** → **Add domain** and add `lumenspaceapp.github.io` (your GitHub Pages domain).
 
 ## 3. Create the database
 
