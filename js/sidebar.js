@@ -90,6 +90,8 @@
     const t = Object.values(s.pages).filter(p => p.deleted).length;
     document.getElementById("trashCount").textContent = t || "";
     document.getElementById("wsName").textContent = Store.getName();
+    const logo = document.querySelector(".ws-logo"), ic = Store.getIcon();
+    logo.textContent = ic || (Store.getName() || "L").trim()[0].toUpperCase(); logo.classList.toggle("emoji", !!ic);
     justOpened = null;
   }
 

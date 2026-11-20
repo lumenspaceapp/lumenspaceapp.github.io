@@ -35,12 +35,23 @@ async function init() {
     if (listUnsub) { listUnsub(); listUnsub = null; }
     if (!user) { if (Cloud.ws) leave(true); App.bootLocal?.(); return; }
     const email = user.email.toLowerCase();
-    listUnsub = fb.onSnapshot(fb.query(fb.collection(db, "workspaces"), fb.where("members", "array-contains", email)), snap => {
+    // Cloud.listed resolves once we know (from the server, not just the local cache) which workspaces this user is in.
+    let listed; Cloud.listed = new Promise(r => (listed = r)); Cloud.listedFor = user.uid;
+    setTimeout(() => listed(), 6000);
+    listUnsub = fb.onSnapshot(fb.query(fb.collection(db, "workspaces"), fb.where("members", "array-contains", email)), { includeMetadataChanges: true }, snap => {
       Cloud.workspaces = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    }, e => console.warn(e));
+      if (!snap.metadata.fromCache) listed();
+    }, e => { console.warn(e); listed(); });
+    await Cloud.listed;
+    if (Onboarding.active) return; // the setup wizard is driving
     const link = location.hash.match(/^#\/ws\/([^/]+)(?:\/p\/(.+))?$/);
-    const want = link ? link[1] : localStorage.getItem("lumen-active-ws");
-    if (want) await open(want, link?.[2]); else App.bootLocal?.();
+    const last = localStorage.getItem("lumen-active-ws");
+    let want = link ? link[1] : last && last !== "local" ? last : null;
+    if (!want && !link && last !== "local" && Cloud.workspaces.length) want = Cloud.workspaces[0].id; // returning user on a new device
+    if (want) return open(want, link?.[2]);
+    App.bootLocal?.();
+    // brand-new account with nothing yet: set up a workspace for them, Notion-style
+    if (!Cloud.workspaces.length && last !== "local" && !localStorage.getItem("lumen-onboarded-" + user.uid)) Onboarding.newAccount(user);
   });
 }
 
@@ -153,7 +164,7 @@ async function open(id, pageId) {
   unsubs.push(fb.onSnapshot(wsRef, snap => {
     if (!snap.exists()) { UI.toast("That shared workspace no longer exists"); return leave(true); }
     const d = snap.data();
-    Object.assign(ws, { name: d.name, members: d.members || [], owner: d.owner, ownerEmail: d.ownerEmail });
+    Object.assign(ws, { name: d.name, icon: d.icon || "", members: d.members || [], owner: d.owner, ownerEmail: d.ownerEmail });
     syncedName = d.name;
     const r = J(d.root || []);
     if (r !== syncedRoot) {
@@ -192,7 +203,9 @@ async function open(id, pageId) {
 function stopSubs() { unsubs.forEach(u => u()); unsubs = []; clearInterval(beatTimer); Cloud.people = []; renderPresence(); }
 function leave(silent) {
   if (Cloud.ws && Cloud.user && wsRef) fb.deleteDoc(fb.doc(wsRef, "presence", Cloud.user.uid)).catch(() => {});
-  stopSubs(); Cloud.ws = null; wsRef = null; Store.useCloud(null); localStorage.removeItem("lumen-active-ws"); setSaved("Saved");
+  stopSubs(); Cloud.ws = null; wsRef = null; Store.useCloud(null); setSaved("Saved");
+  // remember an explicit switch to the private workspace; otherwise forget the last shared one
+  silent ? localStorage.removeItem("lumen-active-ws") : localStorage.setItem("lumen-active-ws", "local");
   App.onWorkspaceChange();
   if (!silent) UI.toast("💻 Switched to this browser's private workspace");
 }
@@ -225,20 +238,21 @@ function setSaved(t) { const el = document.getElementById("savedState"); if (el)
 addEventListener("beforeunload", () => { if (Cloud.ws) flush(); });
 
 /* ---------- create / invite / delete ---------- */
-async function create(name, copyLocal) {
+// src: true = copy private pages, false = demo pages, or a ready-made { pages, root } state
+async function create(name, src, icon = "") {
   if (!Cloud.user && !(await signIn())) return;
   const email = Cloud.user.email.toLowerCase();
-  const src = JSON.parse(J(copyLocal ? Store.local : Store.seedPages()));
+  src = JSON.parse(J(src === true ? Store.local : src && src.pages ? { pages: src.pages, root: src.root } : Store.seedPages()));
   const ref = fb.doc(fb.collection(db, "workspaces"));
   setSaved("Uploading…");
   try {
-    await fb.setDoc(ref, { name, owner: Cloud.user.uid, ownerEmail: email, members: [email], root: src.root, createdAt: fb.serverTimestamp() });
+    await fb.setDoc(ref, { name, owner: Cloud.user.uid, ownerEmail: email, members: [email], root: src.root, icon, createdAt: fb.serverTimestamp() });
     const pagesCol = fb.collection(ref, "pages"); let skipped = 0;
     const ops = Object.values(src.pages).filter(p => { const ok = J(p).length < 900000; if (!ok) skipped++; return ok; })
       .map(p => b => b.set(fb.doc(pagesCol, p.id), { data: J(p), at: fb.serverTimestamp(), by: Cloud.user.uid }));
     await commit(ops);
     if (skipped) UI.toast(`${skipped} page(s) were too large to upload`);
-    await open(ref.id);
+    await open(ref.id, src.root[0]);
   } catch (e) { console.error(e); setSaved("Saved"); UI.toast("Couldn't create workspace: " + (e.code || e.message)); }
 }
 async function invite(email) {
@@ -320,7 +334,7 @@ Cloud.workspaceMenuItems = () => {
   items.push({ sep: true });
   if (!Cloud.configured) items.push({ label: "Set up sharing…", icon: "link", onClick: setupModal });
   else if (!Cloud.user) items.push({ label: "Sign in with Google", icon: "smile", onClick: signIn });
-  else items.push({ label: "New shared workspace…", icon: "plus", onClick: createDialog }, { label: `Sign out (${Cloud.user.email})`, icon: "arrow", onClick: signOutNow });
+  else items.push({ label: "Create a new workspace…", icon: "plus", onClick: () => Onboarding.newWorkspace() }, { label: `Sign out (${Cloud.user.email})`, icon: "arrow", onClick: signOutNow });
   return items;
 };
 function createDialog() {
@@ -367,6 +381,7 @@ Cloud.share = async anchor => {
   UI.menu(anchor, items, { align: "end" });
 };
 Cloud.signIn = signIn;
+Cloud.createFrom = (name, state, icon) => create(name, state, icon);
 Cloud.open = open;
 Cloud.linkFor = id => `${location.href.split("#")[0]}#/ws/${Cloud.ws.id}/p/${id}`;
 Cloud.renderPresence = renderPresence;

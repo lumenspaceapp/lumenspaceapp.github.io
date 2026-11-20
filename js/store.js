@@ -83,8 +83,8 @@
 
   // `local` is the browser-only workspace (always persisted to localStorage, and owns the settings).
   // `state` is the active workspace: `local`, or a shared cloud workspace that cloud.js swaps in.
-  let local;
-  try { local = JSON.parse(localStorage.getItem(KEY)) || seed(); } catch { local = seed(); }
+  let local, firstRun = false;
+  try { firstRun = !localStorage.getItem(KEY); local = JSON.parse(localStorage.getItem(KEY)) || seed(); } catch { local = seed(); }
   let state = local;
 
   let saveTimer;
@@ -178,6 +178,8 @@
     get isCloud() { return !!state.cloud; },
     useCloud(ws) { state = ws ? Object.assign(ws, { cloud: true, settings: local.settings, recent: ws.recent || [] }) : local; },
     getName() { return state.cloud ? state.name : local.settings.wsName; },
+    getIcon() { return state.cloud ? state.icon : local.settings.wsIcon; },
+    get firstRun() { return firstRun; },
     setName(n) { if (state.cloud) state.name = n; else local.settings.wsName = n; Store.save(); },
     seedPages() { return seed(); },
   };

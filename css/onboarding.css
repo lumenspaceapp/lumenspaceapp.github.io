@@ -1,0 +1,95 @@
+/* ===== Onboarding wizard ===== */
+.ob { position: fixed; inset: 0; z-index: 5; display: grid; place-items: center; padding: 16px;
+  background: color-mix(in srgb, var(--bg) 55%, transparent); backdrop-filter: blur(18px) saturate(140%); -webkit-backdrop-filter: blur(18px) saturate(140%);
+  animation: fadeIn .45s var(--ease); }
+.ob.out { animation: fadeIn .4s var(--ease) reverse forwards; }
+.ob-glow { position: absolute; width: 60vmin; height: 60vmin; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--accent) 45%, transparent), transparent 70%);
+  filter: blur(40px); animation: obPulse 6s ease-in-out infinite; pointer-events: none; }
+@keyframes obPulse { 50% { transform: scale(1.15) translate(4%, -3%); opacity: .7; } }
+.ob-card { position: relative; width: min(720px, 100%); max-height: calc(100vh - 32px); overflow: hidden auto; border-radius: 26px; padding: 38px 44px 30px;
+  animation: pop .55s var(--spring); }
+.ob-x { position: absolute; top: 14px; right: 14px; z-index: 2; }
+.ob-dots { display: flex; gap: 6px; justify-content: center; margin-bottom: 22px; }
+.ob-dots span { width: 8px; height: 8px; border-radius: 8px; background: var(--active); transition: all .4s var(--spring); }
+.ob-dots span.on { width: 26px; background: var(--accent); }
+.ob-dots span.past { background: color-mix(in srgb, var(--accent) 45%, transparent); }
+.ob-stage { position: relative; display: grid; }
+.ob-step { grid-area: 1 / 1; animation: obIn .45s var(--ease) both; }
+.ob-step.back { animation-name: obInBack; }
+.ob-step.leave { animation: obOut .3s var(--ease) forwards; pointer-events: none; }
+.ob-step.leave-back { animation: obOutBack .3s var(--ease) forwards; pointer-events: none; }
+@keyframes obIn { from { opacity: 0; transform: translateX(46px); } to { opacity: 1; transform: none; } }
+@keyframes obInBack { from { opacity: 0; transform: translateX(-46px); } to { opacity: 1; transform: none; } }
+@keyframes obOut { to { opacity: 0; transform: translateX(-46px); } }
+@keyframes obOutBack { to { opacity: 0; transform: translateX(46px); } }
+.ob h1 { font-size: 34px; letter-spacing: -.025em; margin: 14px 0 8px; text-align: center; }
+.ob h2 { font-size: 26px; letter-spacing: -.02em; margin: 0 0 6px; }
+.ob-sub { color: var(--muted); margin: 0 0 22px; line-height: 1.5; }
+.ob-step:has(h1) { text-align: center; }
+.ob-fine { font-size: 12px; color: var(--faint); margin: 18px auto 0; max-width: 380px; }
+.ob-logo { width: 64px; height: 64px; margin: 4px auto 0; border-radius: 18px; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 30px;
+  background: linear-gradient(135deg, var(--accent), #ec4899); box-shadow: 0 16px 40px -12px var(--accent); animation: obFloat 4s ease-in-out infinite; }
+@keyframes obFloat { 50% { transform: translateY(-6px) rotate(-4deg); } }
+.ob-col { display: flex; flex-direction: column; gap: 10px; max-width: 320px; margin: 0 auto; }
+.ob-google { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 11px 16px; font-size: 15px; }
+.ob-google svg { background: #fff; border-radius: 50%; padding: 2px; width: 22px; height: 22px; }
+.ob-ghost { padding: 11px 16px; font-size: 15px; }
+.ob-label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin: 18px 0 7px; letter-spacing: .02em; }
+.ob-input { width: 100%; padding: 11px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--hover); outline: none; font-size: 15px;
+  transition: border-color .2s, box-shadow .2s, background .2s; }
+.ob-input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); background: var(--glass-strong); }
+.ob-uses { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.ob-use { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; text-align: left; padding: 18px 16px; border-radius: 16px;
+  border: 1.5px solid var(--line); background: var(--glass); transition: transform .3s var(--spring), border-color .2s, box-shadow .25s, background .2s; }
+.ob-use:hover { transform: translateY(-3px); box-shadow: var(--shadow); }
+.ob-use.on { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 10px 30px -14px var(--accent); }
+.ob-use-ic { font-size: 28px; transition: transform .35s var(--spring); }
+.ob-use.on .ob-use-ic { transform: scale(1.15) rotate(-6deg); }
+.ob-use b { font-size: 15px; } .ob-use span:last-child { font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+.ob-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.ob-pick { position: relative; display: flex; align-items: center; gap: 10px; padding: 13px 14px; border-radius: 14px; text-align: left; font-weight: 500;
+  border: 1.5px solid var(--line); background: var(--glass); animation: fadeUp .4s var(--ease) both; transition: transform .25s var(--spring), border-color .2s, background .2s; }
+.ob-pick:hover { transform: translateY(-2px); }
+.ob-pick.on { border-color: var(--accent); background: var(--accent-soft); }
+.ob-pick-ic { font-size: 20px; }
+.ob-check { margin-left: auto; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; color: #fff;
+  background: var(--accent); transform: scale(0); transition: transform .3s var(--spring); }
+.ob-pick.on .ob-check { transform: scale(1); }
+.ob-count { font-size: 13px; color: var(--muted); margin-top: 14px; }
+.ob-count.shake { color: var(--c-red); animation: obShake .4s; }
+@keyframes obShake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+.ob-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 26px; }
+.ob-nav .btn { padding: 10px 18px; }
+.ob-split { display: grid; grid-template-columns: 1fr 230px; gap: 26px; align-items: start; }
+.ob-icons { display: flex; flex-wrap: wrap; gap: 4px; }
+.ob-icons button { width: 36px; height: 36px; border-radius: 10px; font-size: 19px; transition: background .15s, transform .25s var(--spring); }
+.ob-icons button:hover { background: var(--hover); transform: scale(1.12); }
+.ob-icons button.on { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.ob-prev { border-radius: 16px; padding: 12px; margin-top: 18px; font-size: 13px; animation: fadeUp .5s var(--ease); }
+.ob-prev-head { display: flex; align-items: center; gap: 8px; padding: 4px 6px 10px; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
+.ob-prev-head b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ob-prev-logo { width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center; background: var(--accent-soft); flex-shrink: 0; }
+.ob-prev-row { padding: 6px 8px; border-radius: 8px; color: var(--muted); animation: fadeUp .4s var(--ease) both; }
+.ob-prev-row.on { background: var(--active); color: var(--text); font-weight: 500; }
+.ob-build { display: grid; gap: 4px; margin-top: 18px; }
+.ob-bi { display: flex; align-items: center; gap: 12px; padding: 9px 12px; border-radius: 12px; color: var(--faint); transition: color .3s, background .3s; }
+.ob-bi.doing { color: var(--text); background: var(--hover); }
+.ob-bi.done { background: transparent; }
+.ob-spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--active); flex-shrink: 0; transition: all .3s var(--spring); }
+.ob-bi.doing .ob-spin { border-color: var(--accent) transparent var(--accent) transparent; animation: obSpin .7s linear infinite; }
+.ob-bi.done .ob-spin { animation: none; border: 0; background: var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l5 5 9-10'/%3E%3C/svg%3E") center/12px no-repeat; transform: scale(1.1); }
+@keyframes obSpin { to { transform: rotate(360deg); } }
+.ob-done { text-align: center; padding: 30px 0 14px; }
+.ob-burst { font-size: 64px; animation: pop .6s var(--spring); display: inline-block; }
+.ob-conf { position: absolute; top: 40%; width: 8px; height: 12px; border-radius: 2px; pointer-events: none; animation: obConf 1.4s cubic-bezier(.2,.7,.4,1) forwards; }
+@keyframes obConf { 0% { transform: translate(0, 0) rotate(0); opacity: 1; } 100% { transform: translate(var(--dx), calc(var(--dy) + 420px)) rotate(var(--r)); opacity: 0; } }
+
+@media (max-width: 640px) {
+  .ob-card { padding: 30px 20px 22px; border-radius: 22px; }
+  .ob-uses { grid-template-columns: 1fr; }
+  .ob-split { grid-template-columns: 1fr; }
+  .ob-prev { display: none; }
+  .ob h1 { font-size: 28px; } .ob h2 { font-size: 22px; }
+}
+
+.ws-logo.emoji { background: var(--hover); box-shadow: none; font-size: 15px; }
