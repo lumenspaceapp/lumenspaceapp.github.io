@@ -9,7 +9,7 @@
   function show(opts) {
     return new Promise(resolve => {
       const a = { name: (opts.user?.displayName || "").trim(), use: "personal", picks: [], wsName: "", icon: "✨",
-        accent: Store.local.settings.accent || ACCENTS[0], theme: document.documentElement.dataset.theme || "light" };
+        avatar: Store.local.settings.avatar ?? (opts.user?.photoURL ? "" : "spark"), accent: Store.local.settings.accent || ACCENTS[0], theme: document.documentElement.dataset.theme || "light" };
       const stage = h("div", { class: "ob-stage" });
       const dots = h("div", { class: "ob-dots" });
       const card = h("div", { class: "ob-card glass-strong" },
@@ -63,9 +63,16 @@
             if (a.use !== k) a.picks = [];
             a.use = k; cards.querySelectorAll(".ob-use").forEach(b => b.classList.toggle("on", b === e.currentTarget));
           } }, h("span", { class: "ob-use-ic", text: u.icon }), h("b", { text: u.label }), h("span", { text: u.desc }))));
+        const photo = opts.user?.photoURL || window.Cloud?.user?.photoURL || "";
+        const avs = h("div", { class: "ob-avs" }, ...[...(photo ? [""] : []), ...Avatars.PRESETS.map(x => x.id)].map(id => {
+          const b = h("button", { type: "button", class: a.avatar === id ? "on" : "", title: id ? Avatars.PRESETS.find(x => x.id === id).name : "Your Google photo", onclick: () => { a.avatar = id; avs.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); } },
+            Apps.avatar({ name: a.name || "You", photo: id === "" ? photo : "", avatar: id }, 36));
+          return b;
+        }));
         return [h("h2", { text: "How do you want to use Lumen?" }),
           h("p", { class: "ob-sub", text: "This helps us suggest the right pages. You can change everything later." }),
           cards, h("label", { class: "ob-label", text: "What should we call you?" }), name,
+          h("label", { class: "ob-label", text: "Pick an avatar" }), avs,
           nav("Continue", () => { if (!a.picks.length) a.picks = [...Templates.USES[a.use].defaults]; go(at + 1); })];
       }
 
@@ -151,7 +158,7 @@
   // apply the chosen look to this device's settings
   function applyLook(a) {
     const s = Store.local.settings;
-    s.accent = a.accent; s.theme = a.theme; if (!Store.isCloud) { s.wsName = a.wsName; s.wsIcon = a.icon; }
+    s.accent = a.accent; s.theme = a.theme; s.avatar = a.avatar ?? s.avatar; if (!Store.isCloud) { s.wsName = a.wsName; s.wsIcon = a.icon; }
     Store.save(true);
   }
 

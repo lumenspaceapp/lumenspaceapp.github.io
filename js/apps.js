@@ -97,7 +97,8 @@
   function avatar(p, size = 24) {
     p = p || {}; const s = size + "px";
     const el = h("span", { class: "avatar", title: p.name || "", style: { width: s, height: s, fontSize: Math.round(size * .42) + "px" } });
-    if (p.photo) el.append(h("img", { src: p.photo, alt: "", referrerpolicy: "no-referrer" }));
+    if (window.Avatars?.has(p.avatar)) { el.innerHTML = Avatars.svg(p.avatar); el.firstChild.setAttribute("width", size); el.firstChild.setAttribute("height", size); el.classList.add("preset"); }
+    else if (p.photo && p.avatar !== "letter") el.append(h("img", { src: p.photo, alt: "", referrerpolicy: "no-referrer" }));
     else { el.textContent = (p.name || "?").trim()[0]?.toUpperCase() || "?"; el.style.background = colorFor(p.key || p.name || "?"); }
     if (p.online) el.classList.add("online");
     return el;
@@ -136,6 +137,15 @@
           ctl.onclick = () => personPicker(ctl, p => { v[f.key] = p ? p.key : ""; paint(); }, { allowNone: true }); paint();
         }
         else if (f.type === "color") { ctl = h("div", { class: "accents" }, ...PALETTE.map(c => h("button", { type: "button", class: v[f.key] === c ? "on" : "", style: { background: c, color: c }, onclick: e => { v[f.key] = c; ctl.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === e.currentTarget)); } }))); if (!v[f.key]) v[f.key] = PALETTE[0], ctl.firstChild.classList.add("on"); }
+        else if (f.type === "avatar") {
+          const opts = [...(f.photo ? [["", "Google photo"]] : []), ["letter", "Initial"], ...Avatars.PRESETS.map(a => [a.id, a.name])];
+          if (v[f.key] == null) v[f.key] = "";
+          ctl = h("div", { class: "av-grid" }, ...opts.map(([id, label]) => {
+            const b = h("button", { type: "button", class: "av-opt" + ((v[f.key] || "") === id ? " on" : ""), title: label, onclick: () => { v[f.key] = id; ctl.querySelectorAll(".av-opt").forEach(x => x.classList.toggle("on", x === b)); } },
+              avatar({ ...(f.person || {}), avatar: id, photo: id === "" ? f.photo : "" }, 44), h("small", { text: label }));
+            return b;
+          }));
+        }
         else if (f.type === "checkbox") { ctl = h("input", { type: "checkbox", checked: !!v[f.key] }); ctl.onchange = () => (v[f.key] = ctl.checked); }
         else { ctl = h("input", { class: "menu-input", type: f.type || "text", placeholder: f.placeholder || "", value: v[f.key] ?? "" }); ctl.oninput = () => (v[f.key] = f.type === "number" ? (ctl.value === "" ? "" : +ctl.value) : ctl.value); }
         return h("label", { class: "f-row" + (f.half ? " half" : "") }, h("span", { text: f.label }), ctl);
@@ -185,7 +195,13 @@
   const money = n => { try { return new Intl.NumberFormat(undefined, { style: "currency", currency: currency(), maximumFractionDigits: 0 }).format(+n || 0); } catch { return (+n || 0).toLocaleString(); } };
   const empty = (ic, text, btn) => h("div", { class: "app-empty" }, h("div", { class: "ae-ic", text: ic }), h("div", { text }), btn || null);
 
-  Object.assign(Apps, { avatar, colorFor, personPicker, form, panel, header, tabs, iso, today, addDays, fmtDate, money, currency, empty });
+  async function chooseAvatar() {
+    const me = Data.me();
+    const v = await form("Choose your avatar", [{ key: "avatar", label: "Shown next to your name in chat, comments, tasks and the team directory", type: "avatar", photo: me.photo, person: me }], { avatar: me.avatar || "" }, { ok: "Use this avatar", width: 560 });
+    if (v) { Data.setAvatar(v.avatar); UI.toast("✨ Avatar updated"); }
+  }
+
+  Object.assign(Apps, { chooseAvatar, avatar, colorFor, personPicker, form, panel, header, tabs, iso, today, addDays, fmtDate, money, currency, empty });
 
   Apps.init = () => { renderNav(); initBell(); };
   window.Apps = Apps;

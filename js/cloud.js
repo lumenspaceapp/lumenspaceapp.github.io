@@ -112,9 +112,10 @@ function renderAccount() {
   const b = document.getElementById("accountBtn"); if (!b) return;
   b.style.display = "";
   const u = Cloud.user;
-  b.innerHTML = u ? `${avatarHtml(u.photoURL, u.displayName || u.email)}<span>${esc(u.displayName || u.email)}</span>`
+  b.innerHTML = u ? `<span class="acct-av"></span><span>${esc(u.displayName || u.email)}</span>`
     : `${icon("smile")}<span>Sign in to share</span>`;
-  b.onclick = e => u ? UI.menu(e.currentTarget, [{ section: u.email }, { label: "Sign out", icon: "arrow", onClick: signOutNow }]) : signIn();
+  if (u) b.querySelector(".acct-av").replaceWith(Apps.avatar({ key: u.email, name: u.displayName || u.email, photo: u.photoURL || "", avatar: Store.local.settings.avatar ?? "" }, 20));
+  b.onclick = e => u ? UI.menu(e.currentTarget, [{ section: u.email }, { label: "Change avatar", icon: "smile", onClick: () => Apps.chooseAvatar() }, { label: "Sign out", icon: "arrow", onClick: signOutNow }]) : signIn();
 }
 const avatarHtml = (src, name) => src ? `<img class="av-img" src="${esc(src)}" alt="" referrerpolicy="no-referrer">` : `<span class="av-img av-letter">${esc((name || "?")[0].toUpperCase())}</span>`;
 
@@ -308,7 +309,7 @@ function heartbeat() {
   const beat = () => {
     if (!Cloud.ws || !Cloud.user) return;
     const u = Cloud.user;
-    fb.setDoc(fb.doc(wsRef, "presence", u.uid), { name: u.displayName || u.email, email: u.email, photo: u.photoURL || "", page: App.currentId || "", at: fb.serverTimestamp() }).catch(() => {});
+    fb.setDoc(fb.doc(wsRef, "presence", u.uid), { name: u.displayName || u.email, email: u.email, photo: u.photoURL || "", avatar: Data.me().avatar || "", page: App.currentId || "", at: fb.serverTimestamp() }).catch(() => {});
   };
   clearInterval(beatTimer); beat(); beatTimer = setInterval(() => { beat(); renderPresence(); }, PRESENCE_MS);
   Cloud.here = beat;
@@ -320,7 +321,7 @@ function renderPresence() {
   const others = Cloud.people.filter(p => p.uid !== Cloud.user?.uid && (!p.at || now - p.at.toMillis() < PRESENCE_MS * 2.6));
   others.slice(0, 5).forEach(p => {
     const pg = Store.page(p.page);
-    const el = h("span", { class: "av" + (p.page === App.currentId ? " here" : ""), title: `${p.name}${pg ? " · on " + (pg.title || "Untitled") : ""}`, html: avatarHtml(p.photo, p.name) });
+    const el = h("span", { class: "av" + (p.page === App.currentId ? " here" : ""), title: `${p.name}${pg ? " · on " + (pg.title || "Untitled") : ""}` }, Apps.avatar({ key: p.email, name: p.name, photo: p.photo, avatar: p.avatar || "" }, 24));
     el.addEventListener("click", () => pg && App.go(pg.id));
     box.append(el);
   });
@@ -386,4 +387,5 @@ Cloud.createFrom = (name, state, icon) => create(name, state, icon);
 Cloud.open = open;
 Cloud.linkFor = id => `${location.href.split("#")[0]}#/ws/${Cloud.ws.id}/p/${id}`;
 Cloud.renderPresence = renderPresence;
+Cloud.renderAccount = renderAccount;
 renderAccount();

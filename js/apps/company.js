@@ -9,9 +9,9 @@
 
   async function editProfile() {
     const me = Data.me(), cur = Data.get("people", me.key) || {};
-    const v = await Apps.form("My profile", [{ key: "name", label: "Name", required: true }, { key: "title", label: "Job title", half: true }, { key: "dept", label: "Department", half: true },
-      { key: "phone", label: "Phone", type: "tel", half: true }, { key: "birthday", label: "Birthday", type: "date", half: true }, { key: "about", label: "About me", type: "textarea", rows: 3 }], { name: me.name, ...cur });
-    if (v) { await Data.update("people", me.key, { ...v, email: me.email, photo: me.photo }); UI.toast("Profile updated"); }
+    const v = await Apps.form("My profile", [{ key: "avatar", label: "Avatar", type: "avatar", photo: me.photo, person: me }, { key: "name", label: "Name", required: true }, { key: "title", label: "Job title", half: true }, { key: "dept", label: "Department", half: true },
+      { key: "phone", label: "Phone", type: "tel", half: true }, { key: "birthday", label: "Birthday", type: "date", half: true }, { key: "about", label: "About me", type: "textarea", rows: 3 }], { name: me.name, ...cur, avatar: me.avatar || "" }, { width: 560 });
+    if (v) { const { avatar, ...rest } = v; await Data.update("people", me.key, { ...rest, email: me.email, photo: me.photo }); Data.setAvatar(avatar); UI.toast("Profile updated"); }
   }
   async function requestAbsence(preset = {}) {
     const v = await Apps.form("Time off", [{ key: "who", label: "Who", type: "person" }, { key: "type", label: "Type", type: "select", options: Object.entries(ABS).map(([k, [l]]) => [k, l]) },

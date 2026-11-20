@@ -67,18 +67,24 @@
     /* ---------- people ---------- */
     me() {
       const u = window.Cloud?.user;
-      if (cloud() && u) return { key: u.email.toLowerCase(), name: u.displayName || u.email.split("@")[0], email: u.email.toLowerCase(), photo: u.photoURL || "" };
-      const s = Store.local.settings, prof = (local.people || {}).me || {};
-      return { key: "me", name: prof.name || s.userName || "You", email: "", photo: "" };
+      // the chosen avatar follows the person across workspaces: this device's setting first, else their saved profile
+      const s = Store.local.settings;
+      if (cloud() && u) {
+        const key = u.email.toLowerCase(), prof = (cache.people || {})[key] || {};
+        return { key, name: u.displayName || u.email.split("@")[0], email: key, photo: u.photoURL || "", avatar: s.avatar ?? prof.avatar ?? "" };
+      }
+      const prof = (local.people || {}).me || {};
+      return { key: "me", name: prof.name || s.userName || "You", email: "", photo: "", avatar: s.avatar ?? prof.avatar ?? "" };
     },
     people() {
       const me = Data.me();
-      if (!cloud()) { const prof = Data.get("people", "me") || {}; return [{ ...prof, ...me, title: prof.title || "", dept: prof.dept || "", phone: prof.phone || "", about: prof.about || "", online: true }]; }
+      if (!cloud()) { const prof = Data.get("people", "me") || {}; return [{ ...prof, ...me, avatar: me.avatar, title: prof.title || "", dept: prof.dept || "", phone: prof.phone || "", about: prof.about || "", online: true }]; }
       const profiles = Object.fromEntries(list("people").map(p => [p.id, p]));
       const online = Object.fromEntries((Cloud.people || []).map(p => [String(p.email || "").toLowerCase(), p]));
       return (Cloud.ws.members || []).map(email => {
         const p = profiles[email] || {}, o = online[email] || {};
-        return { key: email, email, name: p.name || o.name || email.split("@")[0], photo: p.photo || o.photo || "", title: p.title || "", dept: p.dept || "", phone: p.phone || "", about: p.about || "",
+        const self = email === me.key;
+        return { key: email, email, name: p.name || o.name || email.split("@")[0], photo: p.photo || o.photo || "", avatar: self ? me.avatar : (p.avatar ?? o.avatar ?? ""), title: p.title || "", dept: p.dept || "", phone: p.phone || "", about: p.about || "",
           online: !!o.at && Date.now() - (o.at.toMillis?.() || 0) < 70000 };
       });
     },
@@ -87,7 +93,15 @@
     syncMe() {
       if (!cloud()) return;
       const me = Data.me(), cur = Data.get("people", me.key);
-      if (!cur || cur.name !== me.name || cur.photo !== me.photo) Data.update("people", me.key, { name: me.name, photo: me.photo, email: me.email });
+      if (!cur || cur.name !== me.name || cur.photo !== me.photo || (cur.avatar || "") !== me.avatar) Data.update("people", me.key, { name: me.name, photo: me.photo, email: me.email, avatar: me.avatar });
+    },
+    // change my avatar: remembered on this device and saved to my profile in the current workspace
+    setAvatar(id) {
+      Store.local.settings.avatar = id; Store.save(true);
+      const me = Data.me();
+      if (cloud()) Data.syncMe(); else Data.update("people", "me", { avatar: id });
+      window.Cloud?.here?.(); window.Cloud?.renderAccount?.();
+      if (me) dispatchEvent(new HashChangeEvent("hashchange")); // re-render the current view with the new avatar
     },
     notify(to, text, link) { if (!to || to === Data.me().key) return; Data.add("notifications", { to, text, link: link || "", read: false }); },
   };
