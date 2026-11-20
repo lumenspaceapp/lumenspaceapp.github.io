@@ -268,7 +268,13 @@ function createDialog() {
 }
 Cloud.share = async anchor => {
   if (!Cloud.configured) return setupModal();
-  if (!Cloud.ws) return createDialog();
+  if (!Cloud.ws) {
+    if (!Cloud.user || !Cloud.workspaces.length) return createDialog();
+    // already in shared workspaces: offer to open one (that's where inviting happens) or make a new one
+    return UI.menu(anchor, [{ section: "Open a shared workspace to invite people" },
+      ...Cloud.workspaces.map(w => ({ label: w.name, iconHtml: "<span>👥</span>", onClick: () => open(w.id) })),
+      { sep: true }, { label: "New shared workspace…", icon: "plus", onClick: createDialog }], { align: "end" });
+  }
   const ws = Cloud.ws, me = Cloud.user, isOwner = ws.owner === me.uid;
   const base = location.href.split("#")[0];
   const items = [{ section: `👥 ${ws.name} · ${ws.members.length} member${ws.members.length === 1 ? "" : "s"}` }];
