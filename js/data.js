@@ -3,7 +3,9 @@
    Private workspace → browser storage. Same API either way. */
 (function () {
   const LKEY = "lumen-apps-local";
-  const COLS = ["tasks", "projects", "chat", "channels", "feed", "events", "leads", "deals", "contacts", "companies", "people", "absences", "timelog", "files", "folders", "rules", "notifications"];
+  const COLS = ["tasks", "projects", "chat", "channels", "feed", "events", "leads", "deals", "contacts", "companies", "people", "absences", "timelog", "files", "folders", "rules", "notifications",
+    // phase 2: sales, CRM extras, booking, inventory, web forms
+    "products", "quotes", "activities", "history", "items", "settings", "bookings", "inventory", "forms", "formsubs"];
   let local; try { local = JSON.parse(localStorage.getItem(LKEY)) || {}; } catch { local = {}; }
   const cache = {}, subs = {}, unsubs = {}, listeners = {};
   let saveT;
@@ -17,7 +19,7 @@
     if (cloud()) {
       const { fb, ref } = Cloud.fs;
       let q = fb.collection(ref(), col);
-      if (col === "chat" || col === "feed" || col === "notifications" || col === "timelog") q = fb.query(q, fb.orderBy("at", "desc"), fb.limit(400));
+      if (col === "chat" || col === "feed" || col === "notifications" || col === "timelog" || col === "history") q = fb.query(q, fb.orderBy("at", "desc"), fb.limit(400));
       unsubs[col] = fb.onSnapshot(q, snap => {
         snap.docChanges().forEach(ch => { if (ch.type === "removed") delete cache[col][ch.doc.id]; else cache[col][ch.doc.id] = { id: ch.doc.id, ...ch.doc.data() }; });
         emit(col);

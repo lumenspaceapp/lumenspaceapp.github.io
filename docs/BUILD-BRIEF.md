@@ -32,3 +32,40 @@ Lumen (this folder) is a vanilla-JS team workspace in the style of Bitrix24, liv
 - Text in the UI: short, plain and friendly, sentence case.
 - Escape every user-provided string you put into `html` with `UI.esc`.
 - Finish with a short report: what users can now do, new fields you store, anything left undone, and anything the lead must wire up in shared files.
+
+---
+
+# Phase 2 additions (CRM, sales documents, web forms, Booking, Inventory)
+
+## New collections (now allowed, together with all the ones above)
+`products, quotes, activities, history, items, settings, bookings, inventory, forms, formsubs`. Still never invent others.
+Note: the Firebase rules for these are published by the lead later; until then they work in private (local) workspaces, which is where you test logic.
+
+## Shared schemas
+- **settings** (single config docs, read with `Data.get("settings", id) || {}`, write with `Data.update("settings", id, patch)`):
+  - `crm`: `{ pipelines: [{ id, name, stages: [{ id, name, color, sem: "process"|"won"|"lost" }] }], fields: { deals|leads|contacts|companies: [{ key, label, type: "text"|"number"|"date"|"select"|"checkbox"|"url", options? }] }, smart: [{ id, name, icon, stages: [{ id, name, color, sem }], fields: [...] }] }`. If missing, the default pipeline is the current STAGES list in crm.js with id `"default"` (existing deals without `pipeline` belong to it). **Owner: CRM builder.**
+  - `company`: `{ name, address, taxId, email, phone, website, logo: att, bank, invoiceNotes, estimatePrefix: "EST-", invoicePrefix: "INV-", nextEstimate: 1, nextInvoice: 1, currency }` — your business details printed on estimates and invoices. **Owner: Sales builder.**
+  - `booking`: `{ hours: { mon: ["09:00","18:00"], … }, slot: 30, currency }`. **Owner: Booking builder.**
+- **products** (catalog, shared by CRM, Sales, Inventory and Booking): `{ name, sku, kind: "product"|"service", price, unit ("pcs", "hour", "kg"…), tax (percent), category, desc, image: att, active (bool), track (bool: count stock), minStock (number), vendor (companies id) }`. **Owner: Sales builder** (catalog UI). Others read it and may create products through `Apps.Sales.editProduct()`.
+- **quotes** (estimates and invoices): `{ kind: "estimate"|"invoice", number ("INV-0007"), title, deal, contact, company (CRM ids), items: [{ product?, name, qty, unit, price, discount (percent), tax (percent) }], currency, status (estimate: "draft"|"sent"|"accepted"|"declined"; invoice: "draft"|"sent"|"paid"|"overdue"|"cancelled"), issue (YYYY-MM-DD), due (YYYY-MM-DD), notes, terms, paidAt, fromEstimate (id), deleted }`. Totals are always computed from items. **Owner: Sales builder.**
+- **deals** gain `pipeline` (id), `products: [{ product?, name, qty, price, discount, tax }]` (deal amount = products total when there are products), custom field values under `custom: { key: value }`, `deleted`. Leads/contacts/companies gain `custom`, `deleted`; companies gain `type: "client"|"vendor"|"partner"`. **Owner: CRM builder.**
+- **activities** (CRM to-dos with deadlines): `{ type: "call"|"meeting"|"task"|"email"|"note", subject, desc, due (ms timestamp, optional), done (bool), doneAt, owner (key), entity: { col: "deals"|"leads"|"contacts"|"companies"|"items", id } }`. Existing records keep their old inline `activities` array (read it, keep showing it). **Owner: CRM builder.**
+- **history** (audit log, newest 400 load): `{ col, id, action: "created"|"updated"|"deleted"|"restored"|"stage", fields: { key: [old, new] } , title }`. Written by the CRM builder via `Data.hooks` for CRM collections only; at most one doc per save.
+- **items** (smart-process records): `{ type (settings.crm.smart id), title, stage, owner, amount?, custom: {}, deleted }`. **Owner: CRM builder.**
+- **forms** (web forms): `{ name, title, desc, fields: [{ key, label, type: "text"|"email"|"tel"|"textarea"|"select"|"checkbox", required, options? }], published (bool), thanks (text), target: "lead"|"deal", owner (key), button }`. **formsubs**: `{ form, values: { key: value }, at, page }` written by the public form page without sign-in. **Owner: Forms builder.**
+- **bookings**: `kind: "resource"` `{ name, type: "person"|"room"|"equipment", person?, color, active }`; `kind: "service"` `{ name, duration (minutes), price, product?, color, resources: [ids] }`; `kind: "booking"` `{ resource, service, date (YYYY-MM-DD), start ("HH:MM"), finish ("HH:MM"), client: { name, phone, email, contact (CRM id)? }, status: "unconfirmed"|"confirmed"|"late"|"noshow"|"done"|"cancelled", price, paid (bool), note, deal? }`. **Owner: Booking builder.**
+- **inventory**: `kind: "warehouse"` `{ name, address, default (bool) }`; `kind: "doc"` `{ type: "receipt"|"sale"|"transfer"|"writeoff", number, date, warehouse, to (warehouse, transfers), vendor (companies id, receipts), deal (sales), items: [{ product, qty, price }], status: "draft"|"done"|"cancelled", note, reason (write-offs) }`. Stock per product per warehouse = sum of done docs (receipt +, sale −, writeoff −, transfer − from / + to). **Owner: Inventory builder.** Expose `window.InventoryAPI = { stock(productId, warehouseId?) }`.
+
+## Interfaces between phase 2 files (implement exactly these names)
+- **js/apps/sales.js** (Sales builder) registers no sidebar app. It sets `Apps.Sales = { render(root, tab) /* tab: "products"|"estimates"|"invoices" */, editProduct(product?) → Promise<id|null>, productPicker(anchor, onPick(product)), openQuote(id), newQuote({ kind, deal?, contact?, company?, items? }) → Promise<id|null>, dealProducts(container, deal) /* renders an editable products table inside the CRM deal panel and saves deal.products + amount */, totals(items) → { subtotal, discount, tax, total }, settings() /* opens company details editor */ }`.
+- **js/apps/forms.js** (Forms builder) registers no sidebar app. It sets `Apps.Forms = { render(root) }` and owns `form.html` + `js/form-public.js` (the public page). It also turns new `formsubs` into leads (or deals) automatically: on every member's device it listens to `formsubs`, and for each submission creates the lead with source "Web form", the form's owner as responsible, notifies them, then deletes the submission — guard against two devices doing it at once (claim it first with a `Data.update(formsubs, id, {claimed: me, claimedAt})` and only proceed if after a moment the claim is still yours).
+- **js/apps/crm.js** (CRM builder) adds tabs that call those: "Products", "Estimates", "Invoices" → `Apps.Sales.render(root, tab)`, "Forms" → `Apps.Forms.render(root)`; in the deal panel shows `Apps.Sales.dealProducts(el, deal)` and buttons "Create estimate" / "Create invoice" → `Apps.Sales.newQuote({ kind, deal: id, contact, company, items: deal.products })`. Always guard with `if (Apps.Sales)` so the CRM still works if a file fails to load. CRM sets `Apps.CRM = { openRecord(col, id) (keep existing), pipelines(), stagesFor(pipelineId) }`.
+- **js/apps/booking.js** and **js/apps/inventory.js** register sidebar apps `booking` ("Booking", 🗓️) and `inventory` ("Inventory", 📦). Booking may create a CRM contact from a client (`Data.add("contacts", …)`); Inventory "sale" docs may link to a deal and use `Apps.Sales.productPicker`.
+
+## Files each phase 2 builder may edit
+- CRM: `js/apps/crm.js`, `css/crm.css` (move or override CRM styles from css/apps.css into crm.css by overriding — don't edit css/apps.css).
+- Sales: `js/apps/sales.js`, `css/sales.css`.
+- Forms: `js/apps/forms.js`, `css/forms.css`, `form.html`, `js/form-public.js`.
+- Booking: `js/apps/booking.js`, `css/booking.css`.
+- Inventory: `js/apps/inventory.js`, `css/inventory.css`.
+All other phase 1 rules still apply (no git, no browser, no other files, syntax check with node, short report).
