@@ -40,10 +40,10 @@ Checked against the live Bitrix24 portal (all left-menu sections, their tabs and
 | Time planning (start/finish), time tracking per task, estimates | ✅ |
 | Task needs approval by the creator | ✅ |
 | Flows (intake queues that auto-assign) | ⬜ |
-| Scrum (backlog, sprints, story points, burndown) | ⬜ |
+| Scrum (backlog, sprints, story points, epics, burndown, velocity) | ✅ |
 | Efficiency %, recycle bin | ✅ (task reports: phase 4) |
 | Link tasks to CRM items | ⬜ |
-| Workgroups / project spaces with their own feed, tasks, calendar, drive, chat, members, privacy | 🟡 (projects are task groups only) |
+| Workgroups / project spaces with their own feed, tasks, calendar, drive, chat, members, privacy | ✅ |
 | Collabs (projects with external guests) | ⬜ |
 
 ## 4. Calendar & booking
@@ -81,12 +81,12 @@ Checked against the live Bitrix24 portal (all left-menu sections, their tabs and
 | Bitrix24 | Lumen |
 |---|---|
 | Employee directory, structure, absence chart, worktime (clock in/out) | ✅ |
-| Company structure as an org chart with department heads | 🟡 |
-| Work reports (daily / weekly report to your manager, with approval) | ⬜ |
-| Work schedules (shifts) | ⬜ |
-| Meetings and briefings (agenda, attendees, minutes, follow-up tasks) | ⬜ |
-| Leave requests with approval | ⬜ |
-| Birthdays & anniversaries | 🟡 (birthday field) |
+| Company structure as an org chart with department heads | ✅ |
+| Work reports (daily / weekly report to your manager, with approval) | ✅ |
+| Work schedules (shifts) | ✅ |
+| Meetings and briefings (agenda, attendees, minutes, follow-up tasks) | ✅ |
+| Leave requests with approval and leave balances | ✅ |
+| Birthdays & anniversaries | ✅ |
 | Knowledge base (spaces with pages) | 🟡 (Lumen pages, switched off for now) |
 | Login history | 🚫 |
 
@@ -102,10 +102,10 @@ Checked against the live Bitrix24 portal (all left-menu sections, their tabs and
 ## 8. Automation & analytics
 | Bitrix24 | Lumen |
 |---|---|
-| Automation rules and triggers | ✅ (simple) |
-| RPA processes (custom pipelines with stages, forms and assigned steps) | ⬜ |
-| Lists (custom databases), smart scripts | ⬜ |
-| Approval workflows (leave, expenses, purchases) | ⬜ |
+| Automation rules and triggers (conditions, many triggers and actions, run log) | ✅ |
+| RPA processes (custom pipelines with stages, forms and assigned steps) | ✅ |
+| Lists (custom databases) | ✅ (smart scripts: later) |
+| Approval workflows (leave, expenses, purchases) | ✅ |
 | BI Builder: dashboards for CRM, tasks, automation, employees | 🟡 (CRM reports, Home dashboard) |
 | CoPilot AI (task descriptions, checklists, summaries) | ⬜ after Lumi AI is live |
 
@@ -113,13 +113,13 @@ Checked against the live Bitrix24 portal (all left-menu sections, their tabs and
 | Bitrix24 | Lumen |
 |---|---|
 | Notifications, search, themes, invite users, mobile | ✅ |
-| Access permissions (admin / member roles, per-app rights) | ⬜ |
+| Access permissions (owner / admin / member / guest, per-app view and edit rights) | ✅ (enforced in the app, not yet by the database) |
 | Market, developer resources, MCP connections, subscription | 🚫 |
 
 ## Build plan
 1. ✅ **Daily work** (shipped 21 Nov 2026): Tasks (calendar / Gantt / planner views, participants & observers, subtasks, tags, reminders, recurring, templates, time tracking, approval, files), Calendar (day view, invitations with accept/decline, recurring events, reminders), Messenger (group chats, replies, pins, files, search, read receipts, task chats), Feed (event & file posts, recipients, read receipts, @mentions).
 2. ✅ **Sales** (shipped 21 Nov 2026): several pipelines, products & catalog, estimates & invoices with PDF, activities, import/export, custom fields, CRM web forms, Booking, Inventory.
-3. **Company**: work reports, schedules, meetings & briefings, leave approvals, org chart, project spaces (workgroups + Scrum), Lists & RPA processes, access permissions.
+3. ✅ **Company** (shipped 21 Nov 2026): work reports, schedules, meetings & briefings, leave approvals, org chart, project spaces (workgroups + Scrum), Lists & RPA processes, access permissions.
 4. **Extras**: analytics dashboards, whiteboards, e-signature, marketing segments, knowledge base, AI helpers.
 
 Limits to keep in mind: on Firebase's free plan a workspace gets about 50,000 reads and 20,000 writes a day and 1 GB of storage, which is plenty for a small team but not for big files or large customer lists.
