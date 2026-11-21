@@ -359,3 +359,13 @@ body.gated #app { visibility: hidden; }
 .gate-spin { width: 34px; height: 34px; margin: 10px auto 0; border-radius: 50%; border: 3px solid color-mix(in srgb, var(--accent) 25%, transparent); border-top-color: var(--accent); animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 body.no-motion .gate, body.no-motion .gate-card { animation: none; }
+
+/* "Made by PublishKaro" credit (sidebar bottom + sign-in card) */
+.pk-credit { display: flex; align-items: center; justify-content: center; gap: 7px; margin: 6px 4px 0; padding: 6px 8px; border-radius: 9px;
+  font-size: 11.5px; color: var(--faint); text-decoration: none; transition: background .2s, color .2s; white-space: nowrap; }
+.pk-credit img { width: 16px; height: 16px; border-radius: 4px; flex-shrink: 0; filter: drop-shadow(0 2px 6px rgba(67, 56, 202, .25)); }
+.pk-credit b { font-weight: 650; color: var(--muted); }
+.pk-credit:hover { background: var(--hover); color: var(--muted); }
+.pk-credit:hover b { color: #4338CA; }
+[data-theme="dark"] .pk-credit:hover b { color: #8b84ff; }
+.gate-credit { margin: 14px auto 0; padding-top: 12px; border-top: 1px solid var(--line); border-radius: 0; background: none !important; }

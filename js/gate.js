@@ -10,15 +10,18 @@
     return h("div", { class: "gate-card glass-strong" },
       h("div", { class: "gate-logo" }, h("img", { src: "assets/logo.svg", alt: "Lumen" })), ...kids);
   }
+  // "Made by PublishKaro" with their logo, at the bottom of every gate card
+  const credit = () => h("a", { class: "pk-credit gate-credit", href: "https://publishkaro.com", target: "_blank", rel: "noopener", title: "Visit PublishKaro" },
+    h("img", { src: "assets/publishkaro.svg", alt: "", width: 16, height: 16 }), h("span", {}, "Made by ", h("b", { text: "PublishKaro" })));
   function render(st, email) {
     state = st;
     if (!el) { el = h("div", { class: "gate", role: "dialog", "aria-modal": "true", "aria-label": "Sign in to Lumen" }); document.body.append(el); document.body.classList.add("gated"); }
-    if (st === "loading") return el.replaceChildren(card(h("div", { class: "gate-spin" }), h("p", { class: "gate-sub", text: "Opening Lumen…" })));
+    if (st === "loading") return el.replaceChildren(card(h("div", { class: "gate-spin" }), h("p", { class: "gate-sub", text: "Opening Lumen…" }), credit()));
     if (st === "sent") return el.replaceChildren(card(
       h("h1", { text: "Check your inbox ✉️" }),
       h("p", { class: "gate-sub" }, "We sent a sign-in link to ", h("b", { text: email || "your email" }), ". Open it on this device to continue."),
       h("p", { class: "gate-fine", text: "Can't find it? Look in spam or promotions. The link works once and expires after a while." }),
-      h("button", { class: "btn gate-wide", text: "Use a different email", onclick: () => render("signin") })));
+      h("button", { class: "btn gate-wide", text: "Use a different email", onclick: () => render("signin") }), credit()));
 
     const google = h("button", { class: "btn primary gate-wide gate-google", onclick: async () => {
       google.disabled = true; google.lastChild.textContent = " Signing in…";
@@ -43,7 +46,8 @@
       google,
       links ? h("div", { class: "gate-or" }, h("span", { text: "or" })) : null,
       links ? inp : null, links ? send : null, msg,
-      h("p", { class: "gate-fine", text: "Invited by a teammate? Sign in with the email address the invite was sent to." })));
+      h("p", { class: "gate-fine", text: "Invited by a teammate? Sign in with the email address the invite was sent to." }),
+      credit()));
   }
 
   window.Gate = {
