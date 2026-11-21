@@ -97,3 +97,19 @@ tr.row:hover .open-row, .b-card:hover .open-row { opacity: 1; }
 .prop-row .pv:hover { background: var(--hover); }
 .peek-notes { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
 .peek-notes textarea { width: 100%; min-height: 200px; border: 0; outline: none; background: transparent; resize: vertical; line-height: 1.6; }
+
+/* board drag & drop (js/board-dnd.js): floating copy, landing slot, calm redraw after a drop */
+.kd-ghost { position: fixed !important; left: 0; top: 0; margin: 0 !important; z-index: 9999; pointer-events: none; cursor: grabbing;
+  animation: none !important; transition: box-shadow .2s, opacity .2s; will-change: transform; transform-origin: 50% 40%;
+  box-shadow: 0 18px 40px -8px rgba(20, 10, 60, .35), 0 6px 14px rgba(20, 10, 60, .14); background: var(--glass-strong); opacity: .98; }
+[data-theme="dark"] .kd-ghost { box-shadow: 0 18px 44px -6px rgba(0, 0, 0, .65), 0 6px 14px rgba(0, 0, 0, .4); }
+.kd-ghost.kd-no { opacity: .8; }
+.kd-ghost.kd-landing { box-shadow: 0 1px 3px rgba(0, 0, 0, .06); transition: box-shadow .28s; }
+.kd-ph { flex-shrink: 0; border-radius: 10px; border: 1.5px dashed color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent); transform-origin: top; }
+.b-card.kd-hidden { display: none !important; }
+body.kd-dragging, body.kd-dragging * { cursor: grabbing !important; user-select: none !important; }
+body.kd-dragging .b-card:hover { transform: none; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+body.kd-settle .b-card, body.kd-settle .b-col, body.kd-settle .board { animation: none !important; }
+.b-card.kd-dropped { animation: kd-drop .7s ease-out !important; }
+@keyframes kd-drop { 0% { box-shadow: 0 0 0 2px var(--accent), 0 8px 20px -6px color-mix(in srgb, var(--accent) 40%, transparent); } 100% { box-shadow: 0 1px 3px rgba(0,0,0,.06); } }
