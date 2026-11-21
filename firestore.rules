@@ -8,8 +8,34 @@ service cloud.firestore {
     }
 
     match /workspaces/{ws} {
-      // workspace doc helpers for the update rule (access roles)
-      function wsAdmin(d) { return d.get('roles', {}).get(myEmail(), 'member') == 'admin'; }
+      // workspace doc helpers for the update rule (access levels)
+      function wsRole(d) { return d.get('roles', {}).get(myEmail(), 'member'); }
+      function wsAdmin(d) { return wsRole(d) == 'admin'; }
+      function wsManager(d) { return wsRole(d) == 'manager'; }
+      function touched() { return request.resource.data.diff(resource.data).affectedKeys(); }
+      // admins name the one person a write changes in `roleEdit`: only that person's role entry may change, only they
+      // may leave the members list (adding new members is fine), and they must not be an admin before or after
+      function adminEditOk(before, after) {
+        let k = after.get('roleEdit', '');
+        let rb = before.get('roles', {});
+        let ra = after.get('roles', {});
+        return ra.diff(rb).affectedKeys().hasOnly([k])
+          && before.members.toSet().difference(after.members.toSet()).hasOnly([k])
+          && rb.get(k, 'member') != 'admin'
+          && ra.get(k, 'member') != 'admin';
+      }
+      // ownership transfer: the owner names an admin in `pendingOwner`; that admin then writes their own uid / email
+      // as the owner, clears `pendingOwner`, may drop their own role entry and must make the old owner an admin
+      function takesOwnership(before, after) {
+        let oe = before.get('ownerEmail', '');
+        return before.get('pendingOwner', '') == myEmail() && wsAdmin(before)
+          && touched().hasOnly(['owner', 'ownerEmail', 'pendingOwner', 'roles'])
+          && after.owner == request.auth.uid
+          && after.ownerEmail == myEmail()
+          && !('pendingOwner' in after)
+          && after.get('roles', {}).diff(before.get('roles', {})).affectedKeys().hasOnly([myEmail(), oe])
+          && (oe == '' || after.get('roles', {}).get(oe, '') == 'admin');
+      }
       // with ownerEmail known: the owner must stay a member and keep their role entry;
       // without it (older workspaces, until the owner opens them once): admins can't change members at all
       function ownerKept(before, after) {
@@ -24,15 +50,21 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.owner == request.auth.uid
         && myEmail() in request.resource.data.members;
-      // access roles: roles = { email: 'admin' | 'member' | 'guest' } (missing = member), perms = { app: { view, edit } }
-      // the owner can change anything; admins can also change members, roles and perms (never owner / ownerEmail,
-      // and the owner stays a member with an unchanged role entry); everyone else can rename / reorder only
+      // access levels: roles = { email: 'admin' | 'manager' | 'member' | 'guest' } (missing = member), perms = { app: { view, edit, m } }
+      // the owner can change anything; admins can also change members, roles and perms (never owner / ownerEmail /
+      // pendingOwner, the owner stays a member with an unchanged role entry, and no admin is created, changed or removed);
+      // managers can only add members; the named new owner can take over; everyone else can rename / reorder only
       allow update: if signedIn() && myEmail() in resource.data.members
         && (resource.data.owner == request.auth.uid
             || (wsAdmin(resource.data)
-                && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['owner', 'ownerEmail'])
-                && ownerKept(resource.data, request.resource.data))
-            || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['members', 'owner', 'ownerEmail', 'roles', 'perms']));
+                && !touched().hasAny(['owner', 'ownerEmail', 'pendingOwner'])
+                && ownerKept(resource.data, request.resource.data)
+                && adminEditOk(resource.data, request.resource.data))
+            || (wsManager(resource.data)
+                && touched().hasOnly(['members'])
+                && request.resource.data.members.hasAll(resource.data.members))
+            || takesOwnership(resource.data, request.resource.data)
+            || !touched().hasAny(['members', 'owner', 'ownerEmail', 'roles', 'perms', 'roleEdit', 'pendingOwner']));
       allow delete: if signedIn() && resource.data.owner == request.auth.uid;
 
       match /pages/{page} {

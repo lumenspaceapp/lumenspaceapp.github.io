@@ -114,6 +114,9 @@ async function emailInvite(email) {
   await fb.sendSignInLinkToEmail(auth, email, { url, handleCodeInApp: true });
 }
 
+// an admin (not the owner) is writing: the rules want `roleEdit` on every such write (managers must not send it)
+const adminWrite = () => !!Cloud.ws && Cloud.ws.owner !== Cloud.user?.uid && window.Apps?.role?.() === "admin";
+
 /* ---------- auth ---------- */
 async function signIn() {
   if (!Cloud.configured) return setupModal();
@@ -181,13 +184,15 @@ async function open(id, pageId) {
     setSaved("Synced"); heartbeat(); App.onWorkspaceChange(pageId);
     UI.toast(`👥 ${ws.name}`);
   };
-  const myRef = wsRef; let ownerEmailAsked = false;
+  const myRef = wsRef; let ownerEmailAsked = false, acceptAsked = false;
   unsubs.push(fb.onSnapshot(wsRef, snap => {
     if (!snap.exists()) { UI.toast("That shared workspace no longer exists"); return leave(true, true); }
     const d = snap.data();
-    Object.assign(ws, { name: d.name, icon: d.icon || "", members: d.members || [], owner: d.owner, ownerEmail: d.ownerEmail, roles: d.roles || {}, perms: d.perms || {} });
+    Object.assign(ws, { name: d.name, icon: d.icon || "", members: d.members || [], owner: d.owner, ownerEmail: d.ownerEmail, pendingOwner: d.pendingOwner || "", roles: d.roles || {}, perms: d.perms || {} });
     // older workspaces don't store the owner's email (access roles need it): the owner adds it, only they may write it
     if (!d.ownerEmail && !ownerEmailAsked && Cloud.user && d.owner === Cloud.user.uid) { ownerEmailAsked = true; fb.updateDoc(myRef, { ownerEmail: Cloud.user.email.toLowerCase() }).catch(e => console.warn(e)); }
+    // the owner handed the workspace to me: take it over (the rules only let the named admin write their own uid as the owner)
+    if (d.pendingOwner && !acceptAsked && Cloud.user && d.pendingOwner === Cloud.user.email.toLowerCase() && d.owner !== Cloud.user.uid) { acceptAsked = true; acceptOwnership(myRef, d); }
     syncedName = d.name;
     const r = J(d.root || []);
     if (r !== syncedRoot) {
@@ -284,8 +289,8 @@ async function create(name, src, icon = "") {
 async function invite(email) {
   email = email.trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return UI.toast("Enter a valid email address");
-  try { await fb.updateDoc(wsRef, { members: fb.arrayUnion(email) }); }
-  catch (e) { UI.toast(e.code === "permission-denied" ? "Only the owner and admins can invite people" : e.message); return false; }
+  try { await fb.updateDoc(wsRef, { members: fb.arrayUnion(email), ...(adminWrite() ? { roleEdit: "" } : {}) }); }
+  catch (e) { UI.toast(e.code === "permission-denied" ? "Only the owner, admins and managers can invite people" : e.message); return false; }
   await sendInvite(email);
   return true;
 }
@@ -317,17 +322,37 @@ function sendInviteDialog(email, why) {
   m.el.style.width = "480px";
 }
 async function removeMember(email) {
-  // their role goes with them (FieldPath: emails contain dots)
-  const more = Cloud.ws?.roles && email in Cloud.ws.roles ? [new fb.FieldPath("roles", email), fb.deleteField()] : [];
-  try { await fb.updateDoc(wsRef, "members", fb.arrayRemove(email), ...more); UI.toast(`Removed ${email}`); }
-  catch (e) { UI.toast(e.code === "permission-denied" ? "Only the owner and admins can remove people" : e.message); }
+  email = String(email || "").toLowerCase();
+  // their role goes with them (FieldPath: emails contain dots); `roleEdit` names the one person this write changes (the rules check it for admins)
+  const ws = Cloud.ws, more = ws?.roles && email in ws.roles ? [new fb.FieldPath("roles", email), fb.deleteField()] : [];
+  if (ws?.pendingOwner === email && ws.owner === Cloud.user?.uid) more.push("pendingOwner", fb.deleteField());
+  try { await fb.updateDoc(wsRef, "members", fb.arrayRemove(email), "roleEdit", email, ...more); UI.toast(`Removed ${email}`); return true; }
+  catch (e) { UI.toast(e.code === "permission-denied" ? "Not allowed: the owner removes anyone, admins remove people below admin. Publish the latest firestore.rules." : e.message); return false; }
 }
-/* access roles (js/access.js): written field by field so two admins editing at once don't overwrite each other */
+/* access levels (js/access.js): written field by field so two admins editing at once don't overwrite each other */
 const access = {
-  setRole: (email, role) => fb.updateDoc(wsRef, new fb.FieldPath("roles", email), role),
-  setPerm: (area, rule) => fb.updateDoc(wsRef, new fb.FieldPath("perms", area), { view: rule.view, edit: rule.edit }),
-  resetPerms: () => fb.updateDoc(wsRef, { perms: fb.deleteField() }),
+  setRole: (email, role) => fb.updateDoc(wsRef, new fb.FieldPath("roles", email), role, "roleEdit", email),
+  setPerm: (area, rule) => fb.updateDoc(wsRef, new fb.FieldPath("perms", area), { view: rule.view, edit: rule.edit, m: true }, ...(adminWrite() ? ["roleEdit", ""] : [])),
+  resetPerms: () => fb.updateDoc(wsRef, { perms: fb.deleteField(), ...(adminWrite() ? { roleEdit: "" } : {}) }),
 };
+/* ownership transfer: the owner names an admin in `pendingOwner`; when that person next opens the workspace their own app
+   writes their uid as the owner (so nobody needs someone else's uid) and the old owner becomes a Level 1 admin */
+async function transferOwnership(email) {
+  const ws = Cloud.ws;
+  if (!ws || !Cloud.user || ws.owner !== Cloud.user.uid) throw new Error("Only the current owner can transfer ownership");
+  email = String(email || "").toLowerCase();
+  if (!ws.members.includes(email) || (ws.roles || {})[email] !== "admin") throw new Error("Pick a Level 1 admin");
+  await fb.updateDoc(wsRef, { pendingOwner: email });
+}
+async function cancelTransfer() { await fb.updateDoc(wsRef, { pendingOwner: fb.deleteField() }); }
+async function acceptOwnership(ref, d) {
+  const me = Cloud.user.email.toLowerCase(), old = String(d.ownerEmail || "").toLowerCase();
+  const args = ["owner", Cloud.user.uid, "ownerEmail", me, "pendingOwner", fb.deleteField()];
+  if (d.roles && me in d.roles) args.push(new fb.FieldPath("roles", me), fb.deleteField());
+  if (old && old !== me) args.push(new fb.FieldPath("roles", old), "admin");
+  try { await fb.updateDoc(ref, ...args); UI.toast(`👑 You're now the owner of “${d.name}”`); }
+  catch (e) { console.warn(e); UI.toast("Couldn't take over the workspace: " + (e.code || e.message)); }
+}
 async function deleteWorkspace() {
   const ws = Cloud.ws;
   if (!(await UI.confirm(`Permanently delete “${ws.name}” and all of its pages for every member? This can't be undone.`))) return;
@@ -365,7 +390,7 @@ function renderPresence() {
 Cloud.workspaceMenuItems = () => {
   const items = [{ section: "Workspaces" }];
   Cloud.workspaces.forEach(w => items.push({ label: w.name, iconHtml: "<span>👥</span>", kbd: Cloud.ws?.id === w.id ? "✓" : "", onClick: () => Cloud.ws?.id !== w.id && open(w.id) }));
-  if (Cloud.ws && window.Apps?.Access && Apps.isAdmin()) items.push({ label: "Access & roles…", icon: "lock", onClick: () => Apps.Access.open() });
+  if (Cloud.ws && window.Apps?.Access && Apps.isManager?.()) items.push({ label: "Members & levels…", icon: "lock", onClick: () => Apps.Access.open("people") });
   items.push({ sep: true });
   if (!Cloud.configured) items.push({ label: "Set up sharing…", icon: "link", onClick: setupModal });
   else if (!Cloud.user) items.push({ label: "Sign in with Google", icon: "smile", onClick: signIn });
@@ -395,13 +420,14 @@ Cloud.share = async anchor => {
       { sep: true }, { label: "New shared workspace…", icon: "plus", onClick: createDialog }], { align: "end" });
   }
   const ws = Cloud.ws, me = Cloud.user, isOwner = ws.owner === me.uid, myEmail = me.email.toLowerCase();
-  // access roles (js/access.js): admins may invite and remove people too, once the owner's email is known
-  const A = window.Apps?.Access ? Apps : null, isAdmin = isOwner || !!A?.isAdmin();
-  const canManage = isOwner || (isAdmin && !!ws.ownerEmail);
+  // access levels (js/access.js): admins and managers may invite; the owner and admins remove people (through the hand-over dialog)
+  const A = window.Apps?.Access && Apps.canManage ? Apps : null;
+  const canInvite = A ? Apps.canManage(null, "invite") : isOwner;
+  const canRemove = m => A ? Apps.canManage(m, "remove") : isOwner && m !== myEmail;
   const roleOf = m => A ? Apps.role(m) : m === ws.ownerEmail ? "owner" : "member";
   const base = location.href.split("#")[0];
   const items = [{ section: `👥 ${ws.name} · ${ws.members.length} member${ws.members.length === 1 ? "" : "s"}` }];
-  if (canManage) {
+  if (canInvite) {
     const inp = h("input", { class: "menu-input", placeholder: "Friend's Gmail address, then Enter" });
     inp.addEventListener("keydown", async e => { if (e.key === "Enter" && inp.value.trim()) { UI.closePops(); await invite(inp.value); } });
     items.push({ el: inp });
@@ -409,21 +435,24 @@ Cloud.share = async anchor => {
   }
   ws.members.forEach(m => { const r = roleOf(m); items.push({ el: h("div", { class: "mi compact", style: { cursor: "default" } },
     h("span", { class: "mi-ic", text: r === "owner" ? "👑" : "👤" }), h("span", { class: "mi-t", style: { fontWeight: 400, fontSize: "13px" }, text: m + (m === myEmail ? " (you)" : "") }),
-    A && r !== "member" ? Apps.Access.badge(r) : null,
-    canManage && r !== "owner" && m !== ws.ownerEmail && m !== myEmail ? h("span", { style: { marginLeft: A && r !== "member" ? "4px" : "auto", display: "flex", gap: "2px" } },
-      h("button", { class: "icon-btn xs", title: "Resend invite email", text: "✉️", onclick: () => { UI.closePops(); sendInvite(m); } }),
-      h("button", { class: "icon-btn xs", title: "Remove", html: icon("x"), onclick: async () => { await removeMember(m); UI.closePops(); } })) : null) }); });
+    A ? Apps.Access.badge(r) : null,
+    (canInvite || canRemove(m)) && r !== "owner" && m !== ws.ownerEmail && m !== myEmail ? h("span", { style: { marginLeft: A ? "4px" : "auto", display: "flex", gap: "2px" } },
+      canInvite ? h("button", { class: "icon-btn xs", title: "Resend invite email", text: "✉️", onclick: () => { UI.closePops(); sendInvite(m); } }) : null,
+      canRemove(m) ? h("button", { class: "icon-btn xs", title: "Remove…", html: icon("x"), onclick: async () => { UI.closePops(); if (A?.Access?.remove) A.Access.remove(m); else if (await UI.confirm(`Remove ${m}?`, "Remove")) removeMember(m); } }) : null) : null) }); });
   items.push({ sep: true },
-    ...(A && isAdmin ? [{ label: "Access & roles…", icon: "lock", onClick: () => Apps.Access.open() }] : []),
+    ...(A && Apps.isManager?.() ? [{ label: "Members & levels…", icon: "lock", onClick: () => Apps.Access.open("people") }] : []),
     { label: "Copy invite link", icon: "link", onClick: () => { navigator.clipboard?.writeText(`${base}#/ws/${ws.id}`); UI.toast("🔗 Invite link copied. Friends sign in with the email you invited."); } },
     ...(window.FEATURES?.pages !== false ? [{ label: "Copy link to this page", icon: "page", onClick: () => App.copyLink(App.currentId) }] : []));
   if (isOwner) items.push({ label: "Delete shared workspace", icon: "trash", danger: true, onClick: deleteWorkspace });
-  else if (!canManage) items.push({ el: h("div", { class: "menu-empty", style: { fontSize: "12px", maxWidth: "260px" }, text: "Only the owner and admins can invite or remove people." }) });
+  else if (!canInvite) items.push({ el: h("div", { class: "menu-empty", style: { fontSize: "12px", maxWidth: "260px" }, text: "Only the owner, admins and managers can invite people." }) });
   UI.menu(anchor, items, { align: "end" });
 };
 Cloud.signIn = signIn;
 Cloud.invite = invite;
 Cloud.removeMember = removeMember;
+Cloud.transferOwnership = transferOwnership;
+Cloud.cancelTransfer = cancelTransfer;
+Cloud.deleteWorkspace = () => Cloud.ws && Cloud.user && Cloud.ws.owner === Cloud.user.uid ? deleteWorkspace() : UI.toast("Only the owner can delete the workspace");
 Cloud.access = access;
 Cloud.fs = { get fb() { return fb; }, get db() { return db; }, ref: () => wsRef };
 Cloud.createFrom = (name, state, icon) => create(name, state, icon);

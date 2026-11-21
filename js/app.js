@@ -194,7 +194,7 @@
     const body = h("div", null,
       profile,
       row("Workspace name", "Shown at the top of the sidebar", ws),
-      window.Cloud?.ws && window.Apps?.Access && Apps.isAdmin?.() ? row("Access & roles", "Who is an admin, member or guest, and what each role can open", h("button", { class: "btn", text: "Manage access", onclick: () => { m.close(); Apps.Access.open(); } })) : null,
+      window.Cloud?.ws && window.Apps?.Access && (Apps.isManager ? Apps.isManager() : Apps.isAdmin?.()) ? row("Members & levels", Apps.isAdmin?.() ? "People, their levels (Owner, Admin, Manager, Member, Guest) and what each level can open" : "See who's here and invite people", h("button", { class: "btn", text: "Manage access", onclick: () => { m.close(); Apps.Access.open("people"); } })) : null,
       row("Appearance", "Light, dark or follow your system", seg("theme", [["light", "Light"], ["dark", "Dark"], ["system", "System"]])),
       row("Accent color", "Used for highlights, checkboxes and buttons", accents),
       row("Glass blur", "How frosted the panels look", h("span", { class: "set-ctl" }, blur, blurVal)),

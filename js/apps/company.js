@@ -169,8 +169,10 @@
       { key: "phone", label: "Phone", type: "tel", half: true }, { key: "birthday", label: "Birthday", type: "date", half: true }, { key: "joined", label: "Joined on", type: "date", half: true },
       { key: "about", label: "About me", type: "textarea", rows: 3 }], { name: me.name, ...cur, dept: cur.dept || "", avatar: me.avatar || "" }, { width: 560 });
     if (!v) return;
-    const pick = ["name", "title", "dept", "phone", "birthday", "joined", "about"];
-    await Data.update("people", me.key, { ...Object.fromEntries(pick.map(k => [k, v[k] ?? ""])), email: me.email, photo: me.photo });
+    const pick = ["title", "dept", "phone", "birthday", "joined", "about"], nm = String(v.name ?? "").trim();
+    // shared workspace: the typed name is stored as `alias` (the account name in `name` is refreshed from Google on every sign-in)
+    const naming = me.accountName ? { alias: nm && nm !== me.accountName ? nm : "" } : { name: nm };
+    await Data.update("people", me.key, { ...Object.fromEntries(pick.map(k => [k, v[k] ?? ""])), ...naming, email: me.email, photo: me.photo });
     Data.setAvatar(v.avatar); UI.toast("Profile updated");
   }
 
@@ -252,21 +254,27 @@
     const tasks = Apps.liveTasks ? Apps.liveTasks().filter(t => t.status !== "done" && (t.assignee === key || (t.participants || []).includes(key))).sort((a, b) => (a.deadline || "9999").localeCompare(b.deadline || "9999")) : [];
     const row = (ic, label, val) => val ? h("div", { class: "co-pf-row" }, h("span", { class: "co-pf-ic", text: ic }), h("div", null, h("small", { text: label }), typeof val === "string" ? h("span", { text: val }) : val)) : null;
     const plink = (k, label) => h("button", { class: "co-link", onclick: () => openProfile(k) }, label || Data.person(k).name);
+    // access levels (js/access.js): level badge, the "Manage" menu and the manager note for people allowed to manage this profile
+    const A = Apps.Access, lvl = A?.shared?.() ? A.badge(Apps.role(key)) : null;
+    const manage = !mine && A?.manageItems ? A.manageItems(key, { profile: false }) : [];
+    const canEditP = !mine && !!Apps.canManage?.(key, "editProfile");
     let pn;
     const body = h("div", { class: "co-pf" },
       h("div", { class: "co-pf-top" }, Apps.avatar(p, 88), h("h2", { text: p.name + (mine ? " (you)" : "") }), h("div", { class: "co-muted", text: p.title || "No title yet" }),
-        st ? h("span", { class: "tag", dataset: { tc: st.tc }, text: st.text }) : h("span", { class: "tag", dataset: { tc: "gray" }, text: "Not in yet" })),
+        h("div", { class: "co-pf-tags" }, lvl, st ? h("span", { class: "tag", dataset: { tc: st.tc }, text: st.text }) : h("span", { class: "tag", dataset: { tc: "gray" }, text: "Not in yet" }))),
       h("div", { class: "co-pf-acts" },
         mine ? h("button", { class: "btn primary", text: "Edit profile", onclick: () => { pn.close(); editProfile(); } })
           : h("button", { class: "btn primary", text: "💬 Message", onclick: () => { pn.close(); Apps.go("chat", dmId(key)); } }),
         Apps.Tasks?.newTask ? h("button", { class: "btn", text: "✅ Assign task", onclick: () => { pn.close(); Apps.Tasks.newTask({ assignee: key }); } }) : null,
-        p.email ? h("a", { class: "btn", href: "mailto:" + p.email, text: "✉️ Email" }) : null),
+        p.email ? h("a", { class: "btn", href: "mailto:" + p.email, text: "✉️ Email" }) : null,
+        manage.length ? h("button", { class: "btn", text: "⚙️ Manage", onclick: e => UI.menu(e.currentTarget, manage.map(it => it.onClick ? { ...it, onClick: () => { pn.close(); it.onClick(); } } : it), { align: "end" }) }) : null),
       h("div", { class: "co-pf-rows" },
         row("🏢", "Department", p.dept || "Not set"), row("👤", "Manager", mgr ? plink(mgr) : null),
         row("✉️", "Email", p.email ? h("a", { href: "mailto:" + p.email, text: p.email }) : null), row("📞", "Phone", p.phone ? h("a", { href: "tel:" + p.phone, text: p.phone }) : null),
         row("🎂", "Birthday", p.birthday && p.birthday.length >= 10 ? mdLong(p.birthday.slice(5)) : null), row("🎉", "Joined", p.joined ? new Date(p.joined + "T00:00").toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }) : null),
         row("🕘", "Today's shift", sh ? `${sh.start}–${sh.finish}` : null)),
       p.about ? h("p", { class: "co-pf-about", text: p.about }) : null,
+      canEditP && p.mgrNote ? h("div", { class: "co-pf-note" }, h("small", { text: "🔒 Manager note" }), h("p", { text: p.mgrNote })) : null,
       reports.length ? h("div", { class: "co-pf-sec" }, h("h4", { text: `Team · ${reports.length}` }), h("div", { class: "co-pf-team" }, ...reports.map(r => h("button", { class: "co-mem", onclick: () => openProfile(r.key) }, Apps.avatar(r, 24), h("span", { text: r.name }))))) : null,
       h("div", { class: "co-pf-sec" }, h("h4", { text: `Open tasks · ${tasks.length}` }),
         ...(tasks.length ? tasks.slice(0, 6).map(t => h("button", { class: "co-pf-task", onclick: () => { pn.close(); openTask(t.id); } }, h("span", { text: t.title || "Untitled task" }), t.deadline ? h("small", { class: "dl" + (t.deadline < T() ? " overdue" : ""), text: Apps.fmtDate(t.deadline) }) : null))

@@ -86,8 +86,9 @@
       // the chosen avatar follows the person across workspaces: this device's setting first, else their saved profile
       const s = Store.local.settings;
       if (cloud() && u) {
-        const key = u.email.toLowerCase(), prof = (cache.people || {})[key] || {};
-        return { key, name: u.displayName || u.email.split("@")[0], email: key, photo: u.photoURL || "", avatar: s.avatar ?? prof.avatar ?? "" };
+        const key = u.email.toLowerCase(), prof = (cache.people || {})[key] || {}, accountName = u.displayName || u.email.split("@")[0];
+        // alias: a display name set by me or an admin (people/<email>.alias) wins over the Google account name
+        return { key, name: prof.alias || accountName, accountName, email: key, photo: u.photoURL || "", avatar: s.avatar ?? prof.avatar ?? "" };
       }
       const prof = (local.people || {}).me || {};
       return { key: "me", name: prof.name || s.userName || "You", email: "", photo: "", avatar: s.avatar ?? prof.avatar ?? "" };
@@ -100,16 +101,16 @@
       return (Cloud.ws.members || []).map(email => {
         const p = profiles[email] || {}, o = online[email] || {};
         const self = email === me.key;
-        return { key: email, email, name: p.name || o.name || email.split("@")[0], photo: p.photo || o.photo || "", avatar: self ? me.avatar : (p.avatar ?? o.avatar ?? ""), title: p.title || "", dept: p.dept || "", phone: p.phone || "", about: p.about || "", birthday: p.birthday || "",
+        return { key: email, email, name: p.alias || p.name || o.name || email.split("@")[0], alias: p.alias || "", photo: p.photo || o.photo || "", avatar: self ? me.avatar : (p.avatar ?? o.avatar ?? ""), title: p.title || "", dept: p.dept || "", phone: p.phone || "", about: p.about || "", birthday: p.birthday || "", joined: p.joined || "",
           online: !!o.at && Date.now() - (o.at.toMillis?.() || 0) < 70000 };
       });
     },
     person(key) { return Data.people().find(p => p.key === key) || { key, name: key === "me" ? "You" : String(key || "Someone").split("@")[0], photo: "" }; },
-    // keep my profile card up to date for teammates
+    // keep my profile card up to date for teammates: `name` is always the account name; `alias` (a chosen display name) is never touched here
     syncMe() {
       if (!cloud()) return;
-      const me = Data.me(), cur = Data.get("people", me.key);
-      if (!cur || cur.name !== me.name || cur.photo !== me.photo || (cur.avatar || "") !== me.avatar) Data.update("people", me.key, { name: me.name, photo: me.photo, email: me.email, avatar: me.avatar });
+      const me = Data.me(), cur = Data.get("people", me.key), name = me.accountName || me.name;
+      if (!cur || cur.name !== name || cur.photo !== me.photo || (cur.avatar || "") !== me.avatar) Data.update("people", me.key, { name, photo: me.photo, email: me.email, avatar: me.avatar });
     },
     // change my avatar: remembered on this device and saved to my profile in the current workspace
     setAvatar(id) {

@@ -391,6 +391,13 @@
       if (!(await UI.confirm(withEv ? "Delete this post and its calendar event?" : "Delete this post?"))) return;
       Data.remove("feed", p.id); if (withEv) Data.remove("events", ev.id);
     }
+    // someone else's post taken down by a moderator: the author is told
+    async function removePost(p) {
+      if (!(await UI.confirm(`Remove ${Data.person(p.by).name}'s post for everyone?`, "Remove"))) return;
+      Data.remove("feed", p.id);
+      Data.notify(p.by, `🛡️ <b>${esc(Data.me().name)}</b> removed your post`, "#/app/feed", String(p.text || "").slice(0, 200));
+      UI.toast("Post removed");
+    }
     function copyLink(p) {
       const url = location.origin + location.pathname + link(p.id);
       (navigator.clipboard?.writeText(url) || Promise.reject()).then(() => UI.toast("🔗 Link copied"), () => UI.toast(url));
@@ -467,6 +474,7 @@
         Apps.mentioned(txt).filter(k => !told.has(k) && reach.has(k)).forEach(k => Data.notify(k, `💬 ${who} mentioned you in a comment`, link(p.id), txt));
       }
       cin.onkeydown = e => { if (e.key !== "Enter" || e.isComposing || e.shiftKey) return; e.preventDefault(); send(); };
+      const canMod = by => !!window.Apps?.canManage?.(by, "moderate", p.group ? { group: p.group } : null);
       const cmt = c => {
         const id = cid(c), mineLikes = clikes.filter(x => x.startsWith(id + "|")), cl = mineLikes.includes(id + "|" + me), who = Data.person(c.by);
         return h("div", { class: "cmt" }, Apps.avatar(who, 28), h("div", { class: "fd-cbody" },
@@ -475,7 +483,12 @@
           h("div", { class: "fd-cacts" },
             h("button", { type: "button", class: cl ? "on" : "", title: mineLikes.map(x => Data.person(x.split("|")[1]).name).join(", "), text: (cl ? "❤️ Liked" : "Like") + (mineLikes.length ? " · " + mineLikes.length : ""), onclick: () => Data.arr("feed", p.id, "commentLikes", id + "|" + me, !cl) }),
             h("button", { type: "button", text: "Reply", onclick: () => reply(who) }),
-            c.by === me ? h("button", { type: "button", text: "Delete", onclick: async () => { if (await UI.confirm("Delete this comment?")) Data.arr("feed", p.id, "comments", c, false); } }) : null)));
+            c.by === me ? h("button", { type: "button", text: "Delete", onclick: async () => { if (await UI.confirm("Delete this comment?")) Data.arr("feed", p.id, "comments", c, false); } })
+              : canMod(c.by) ? h("button", { type: "button", class: "fd-mod", text: "Remove", title: "Remove this comment (moderation)", onclick: async () => {
+                if (!(await UI.confirm(`Remove ${who.name}'s comment for everyone?`, "Remove"))) return;
+                Data.arr("feed", p.id, "comments", c, false);
+                Data.notify(c.by, `🛡️ <b>${esc(Data.me().name)}</b> removed your comment`, link(p.id), c.text || "");
+              } }) : null)));
       };
 
       const menuItems = [
@@ -485,6 +498,8 @@
           { label: p.pinned ? "Unpin" : "Pin to top", icon: "star", onClick: () => Data.update("feed", p.id, { pinned: !p.pinned }) },
           { sep: true },
           { label: "Delete post", icon: "trash", danger: true, onClick: () => deletePost(p) }] : []),
+        // moderation: owner/admins anywhere, managers in workgroups they own or moderate (deleting only; editing stays the author's)
+        ...(p.by !== me && canMod(p.by) ? [{ sep: true }, { label: "Remove post", icon: "trash", danger: true, onClick: () => removePost(p) }] : []),
       ];
       const sub = [p.group ? h("span", { class: "fd-tol" }, "in ", h("a", { href: "#/app/groups/" + encodeURIComponent(p.group) + "/feed", text: groupName(p.group), style: { color: "var(--accent)", fontWeight: 600, textDecoration: "none" } }))
         : h("span", { class: "fd-tol" }, "To: ", h("b", { text: audienceLabel(p.audience) })), " · ", h("span", { class: "fd-time", dataset: { at: p.at }, text: UI.timeAgo(p.at) }),

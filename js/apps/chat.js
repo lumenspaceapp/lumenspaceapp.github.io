@@ -99,9 +99,11 @@
   function meetUrl(ch) { return `https://meet.jit.si/Lumen-${(window.Cloud?.ws?.id || "local").slice(0, 10)}-${ch.replace(/[^a-z0-9]/gi, "").slice(0, 24)}`; }
 
   /* ---------- text helpers ---------- */
+  // a message someone else took down (workspace admins, or managers in workgroups they lead): deletedBy is not the author
+  const delText = m => !m.deletedBy || m.deletedBy === m.by ? "Message deleted" : Apps.isAdmin?.(m.deletedBy) ? "Removed by an admin" : "Removed by a moderator";
   function snippet(m) {
     if (!m) return "";
-    if (m.deleted) return "Message deleted";
+    if (m.deleted) return delText(m);
     if (m.kind === "call") return "📹 Video call";
     const t = String(m.text || "").replace(/\s+/g, " ").trim();
     if (t) return t;
@@ -387,7 +389,7 @@
       if (m.kind === "sys") return h("div", { class: "cx-sys" + (isNew ? " new" : ""), dataset: { id: m.id } }, h("span", { text: m.text }));
       const bub = h("div", { class: "cx-bub" });
       if (!mine && !grouped && !dm) bub.append(h("div", { class: "cx-name", style: { color: Apps.colorFor(m.by) }, text: p.name }));
-      if (m.deleted) bub.append(h("div", { class: "cx-del" }, h("span", { text: "Message deleted" }), metaEl(m)));
+      if (m.deleted) bub.append(h("div", { class: "cx-del" + (m.deletedBy && m.deletedBy !== m.by ? " cx-modded" : "") }, h("span", { text: delText(m) }), metaEl(m)));
       else {
         if (m.fwd) bub.append(h("div", { class: "cx-fwd" }, h("span", { html: svg(IC.fwd) }), "Forwarded from ", h("b", { text: person(m.fwd.by).name })));
         if (m.replyTo) bub.append(h("button", { class: "cx-quote", title: "Go to the original message", onclick: e => { e.stopPropagation(); jumpTo(m.replyTo.id); } },
@@ -438,6 +440,8 @@
       m = Data.get("chat", m.id) || m;
       if (m.deleted) return;
       const mine = m.by === meKey(), pinned = isPinned(m);
+      // moderation: owner/admins in any channel or group chat they can see, managers in chats of workgroups they lead (never DMs)
+      const canMod = !mine && !isDM(active) && canSee(active) && m.kind !== "sys" && !!Apps.canManage?.(m.by, "moderate", { channel: active });
       const reactRow = h("div", { class: "cx-react-row" }, ...REACT.map(em => h("button", { text: em, onclick: () => { UI.closePops(); react(m, em); } })),
         h("button", { class: "cx-react-more", title: "More emoji", text: "+", onclick: e => UI.emojiPicker(e.currentTarget, em => em && react(m, em)) }));
       UI.menu(anchor, [
@@ -448,6 +452,7 @@
         m.text ? { label: "Copy text", iconHtml: svg(IC.copy), onClick: () => navigator.clipboard?.writeText(m.text).then(() => UI.toast("Copied"), () => UI.toast("Couldn't copy")) } : null,
         mine && !m.kind ? { label: "Edit", iconHtml: svg(IC.edit), onClick: () => startEdit(m) } : null,
         mine ? { label: "Delete", iconHtml: svg(IC.trash), danger: true, onClick: () => del(m) } : null,
+        canMod ? { label: "Remove message", iconHtml: svg(IC.trash), danger: true, onClick: () => del(m, true) } : null,
       ], { align: "start" });
     }
     function paintSeen() {
@@ -678,10 +683,12 @@
       else { await ensureDoc(ch); Data.arr("channels", ch, "pinned", m.id, on); }
       UI.toast(on ? "📌 Pinned" : "Unpinned");
     }
-    async function del(m) {
-      if (!await UI.confirm("Delete this message? Everyone will see “Message deleted” instead.")) return;
+    async function del(m, mod) {
+      const marker = mod ? (Apps.isAdmin?.() ? "Removed by an admin" : "Removed by a moderator") : "Message deleted";
+      if (!await UI.confirm(mod ? `Remove this message from ${person(m.by).name}? Everyone will see “${marker}” instead.` : "Delete this message? Everyone will see “Message deleted” instead.", mod ? "Remove" : "Delete")) return;
       if (editing && editing.id === m.id) cancelEdit();
-      Data.update("chat", m.id, { deleted: true, text: "", files: [], replyTo: null, fwd: null, reactions: {}, pinned: false });
+      if (mod && !isDM(m.channel) && channelDoc(m.channel)?.pinned?.includes(m.id)) Data.arr("channels", m.channel, "pinned", m.id, false);
+      Data.update("chat", m.id, { deleted: true, deletedBy: meKey(), text: "", files: [], replyTo: null, fwd: null, reactions: {}, pinned: false });
     }
     function forward(m) {
       const src = Data.get("chat", m.id) || m, me = meKey();
