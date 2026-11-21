@@ -7,7 +7,9 @@
     // phase 2: sales, CRM extras, booking, inventory, web forms
     "products", "quotes", "activities", "history", "items", "settings", "bookings", "inventory", "forms", "formsubs",
     // phase 3: HR, lists, processes, approvals
-    "reports", "shifts", "meetings", "lists", "listitems", "processes", "procitems", "workflows", "wfruns"];
+    "reports", "shifts", "meetings", "lists", "listitems", "processes", "procitems", "workflows", "wfruns",
+    // phase 4: analytics, whiteboards, e-signature, marketing, knowledge base
+    "dashboards", "boards", "boardels", "signdocs", "campaigns", "segments", "kbspaces", "kbarticles"];
   let local; try { local = JSON.parse(localStorage.getItem(LKEY)) || {}; } catch { local = {}; }
   const cache = {}, subs = {}, unsubs = {}, listeners = {};
   let saveT;

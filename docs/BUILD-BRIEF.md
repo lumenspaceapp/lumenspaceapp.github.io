@@ -101,3 +101,32 @@ All other phase 1 rules still apply (no git, no browser, no other files, syntax 
 - Groups: `js/apps/groups.js`, `css/groups.css`, and **targeted edits** in `js/apps/tasks.js` (project = workgroup visibility, Scrum fields and views) and `js/apps/feed.js` (group posts) — no one else edits those two files in phase 3.
 - Automation: `js/apps/automation.js`, `css/automation.css`.
 - Access: `js/access.js`, `css/access.css`, and targeted edits in `js/apps.js` (sidebar: hide apps you can't view), `js/cloud.js` (roles UI in the workspace/share menu, saving roles/perms on the workspace doc) and `firestore.rules` (only the workspace-doc update rule: roles/perms changes by owner or admins). No one else edits those files in phase 3.
+
+---
+
+# Phase 4 additions (Analytics, Boards, e-Signature, Marketing, Knowledge base, Drive, AI)
+
+## New collections (allowed now, plus all earlier ones)
+`dashboards, boards, boardels, signdocs, campaigns, segments, kbspaces, kbarticles`. The lead publishes the Firebase rules later; test in a private (local) workspace.
+
+## Shared schemas
+- **dashboards**: `{ name, icon, widgets: [{ id, type, title, source, metric, groupBy, period, size: "s"|"m"|"l", options }], shared (bool), owner }`.
+- **boards** (whiteboards): `{ name, icon, members?: [keys] (missing = everyone), bg: "dots"|"grid"|"plain", viewport? }`; **boardels** (one doc per element so people can edit at once): `{ board, type: "sticky"|"text"|"shape"|"line"|"arrow"|"pen"|"image"|"frame", x, y, w, h, rot, z, color, text, points: [[x,y]…] (pen/line), shape: "rect"|"ellipse"|"diamond", from/to (element ids for connectors), file (att for images), lockedBy?, deleted }`.
+- **signdocs**: `{ title, file: att (the original PDF, ≤700 KB via Apps.attach), signers: [{ key, name, order, status: "waiting"|"signed"|"declined", signedAt, sig: att (PNG of the signature), ip?: "" }], fields: [{ id, signer (key), page, x, y, w, h (fractions 0..1 of the page), type: "signature"|"initials"|"date"|"text", value? }], status: "draft"|"sent"|"completed"|"declined"|"cancelled", order: "any"|"sequence", signed: att (final stamped PDF), audit: [{ at, by, action }], kind: "general"|"hr" }`.
+- **segments**: `{ name, source: "contacts"|"leads"|"companies", rules: [{ field, op, value }], count?, updatedAt }`; **campaigns**: `{ name, channel: "email"|"sms", segment, subject, body (supports {name}, {company}, {first} placeholders), status: "draft"|"scheduled"|"sent", scheduledAt, sentAt, stats: { sent, opened?, clicked? } (manual), blacklist handled via settings "marketing": { blacklist: [emails/phones], from, signature } }`.
+- **kbspaces**: `{ name, icon, desc, access: "all"|"members", members: [keys], color, archived }`; **kbarticles**: `{ space, parent (article id|null), title, icon, body (sanitized HTML), tags, order, versions: [{ at, by, title, body }] (keep the last 10), favorites: [keys], status: "published"|"draft", deleted }`.
+- **files** (Drive builder): may gain `versions: [{ id (files doc of the old version), at, by, size }]`, `owner`, `scope: "company"|"personal"` (missing = company), `deleted`, `comments: [{ id, by, text, at }]`; **folders** may gain `scope`, `owner`, `shared: [keys]`, `deleted`. Attachments use folder "__attachments" and must stay hidden in Drive.
+
+## Interfaces between phase 4 files
+- **js/ai.js** (AI builder) loads before all apps and sets `Apps.AI = { available() → bool (true when window.LUMI_AI_URL is set and someone is signed in), ask(prompt, { context, system, onToken }) → Promise<string> (streams tokens through onToken), button(label, getPrompt, onResult) → a small "✨ label" button element that is hidden when !available() }`. Any app may use `Apps.AI?.available()` to show AI actions; do nothing when it's missing.
+- Each new app registers itself: `analytics` ("Analytics", 📊), `boards` ("Boards", 🧑‍🎨), `sign` ("e-Signature", ✍️), `marketing` ("Marketing", 📣), `kb` ("Knowledge base", 📚). Respect access with `Apps.can?.(name, "edit") ?? true` for creating/editing and `Apps.isAdmin?.()` for admin settings.
+- External libraries: only from `https://cdnjs.cloudflare.com` or `https://cdn.jsdelivr.net/npm/` with an exact version, loaded lazily (inject a `<script>` only when the feature is used), e.g. pdf.js and pdf-lib for e-Signature.
+
+## Files each phase 4 builder may edit
+- Analytics: `js/apps/analytics.js`, `css/analytics.css`.
+- Boards: `js/apps/boards.js`, `css/boards.css`.
+- e-Signature: `js/apps/sign.js`, `css/sign.css`.
+- Marketing: `js/apps/marketing.js`, `css/marketing.css`.
+- Knowledge base: `js/apps/kb.js`, `css/kb.css`.
+- Drive: `js/apps/drive.js`, `css/drive.css`.
+- AI: `js/ai.js`, `css/ai.css`, `worker/src/index.js` (add an assist endpoint) and **small targeted hooks** (an AI button or two, guarded by `Apps.AI?.available()`) in `js/apps/tasks.js`, `js/apps/feed.js`, `js/apps/crm.js`, `js/apps/chat.js`, `js/apps/company.js` — no one else edits those files in phase 4.
