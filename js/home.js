@@ -86,7 +86,7 @@
       const t = T(), tm = Apps.addDays(t, 1);
       const items = [
         ...Apps.eventsBetween(t, tm, { mine: true }).filter(o => !o.declined).map(({ ev: e, date, start }) => ({ day: date, time: start || "", id: e.id, title: e.title, color: e.color || "#7c5cff", open: () => Apps.Calendar.openEvent ? Apps.Calendar.openEvent(e.id, date) : Apps.Calendar.editEvent(e) })),
-        ...Data.list("deals").filter(d => (d.close === t || d.close === tm) && !["won", "lost"].includes(d.stage)).map(d => ({ day: d.close, time: "", title: "💼 " + d.title, color: "#f59e0b", open: () => Apps.CRM.openRecord("deals", d.id) })),
+        ...(Apps.CRM?.live ? Apps.CRM.live("deals") : Data.list("deals").filter(d => !d.deleted)).filter(d => (d.close === t || d.close === tm) && (Apps.CRM?.isOpen ? Apps.CRM.isOpen(d) : !["won", "lost"].includes(d.stage))).map(d => ({ day: d.close, time: "", title: "💼 " + d.title, color: "#f59e0b", open: () => Apps.CRM.openRecord("deals", d.id) })),
       ].sort((a, b) => (a.day + (a.time || "99")).localeCompare(b.day + (b.time || "99")));
       const group = (day, label) => { const its = items.filter(i => i.day === day); return its.length ? [h("div", { class: "hm-day", text: label }), ...its.map(i => h("button", { class: "hm-ev", style: { "--c": i.color }, onclick: i.open }, h("b", { text: i.time || "All day" }), h("span", { text: i.title })))] : []; };
       const body = [...group(t, "Today"), ...group(tm, "Tomorrow")];
@@ -167,9 +167,10 @@
     /* ---------- pipeline (only when the CRM is in use) ---------- */
     cards.crm = h("div");
     function drawCrm() {
-      const deals = Data.list("deals"); if (!deals.length) return cards.crm.replaceChildren();
-      const open = deals.filter(d => !["won", "lost"].includes(d.stage)), month = new Date(); month.setDate(1);
-      const won = deals.filter(d => d.stage === "won" && (d.closedAt || d.at) >= month.getTime());
+      const C = Apps.CRM, deals = C?.live ? C.live("deals") : Data.list("deals").filter(d => !d.deleted); if (!deals.length) return cards.crm.replaceChildren();
+      const sem = d => C?.sem ? C.sem(d) : d.stage === "won" ? "won" : d.stage === "lost" ? "lost" : "process"; // won/lost stages differ per pipeline
+      const open = deals.filter(d => sem(d) === "process"), month = new Date(); month.setDate(1);
+      const won = deals.filter(d => sem(d) === "won" && (d.closedAt || d.at) >= month.getTime());
       const soon = open.filter(d => d.close && d.close <= Apps.addDays(T(), 7)).sort((a, b) => a.close.localeCompare(b.close)).slice(0, 3);
       const sum = a => a.reduce((x, d) => x + (+d.amount || 0), 0);
       cards.crm.replaceChildren(card("hm-crm", "Pipeline", "💼", link("CRM →", () => Apps.go("crm")),

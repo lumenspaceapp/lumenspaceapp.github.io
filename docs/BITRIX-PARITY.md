@@ -55,23 +55,23 @@ Checked against the live Bitrix24 portal (all left-menu sections, their tabs and
 | Recurring events, custom reminders, company / personal calendars | ✅ |
 | Meeting rooms with double-booking warning | ✅ |
 | Google / Outlook calendar sync | 🚫 for now |
-| Booking: resources, services, day/week schedule, customers, confirmations, late/no-show | ⬜ |
+| Booking: resources, services, day/week schedule, customers, confirmations, late/no-show | ✅ |
 
 ## 5. CRM & sales
 | Bitrix24 | Lumen |
 |---|---|
 | Leads (with conversion), deals pipeline, contacts, companies, activity timeline, reports | ✅ |
-| Several pipelines, deal views: kanban / list / activities / calendar | 🟡 (one pipeline) |
-| Activities with deadlines (call, meeting, to-do) and "My activities" | 🟡 |
-| Product catalog, products on deals | ⬜ |
-| Estimates (quotes) and invoices, printable PDF | ⬜ |
-| Vendors, signing parties | ⬜ |
-| History / audit log, recycle bin, duplicates | ⬜ |
-| Import / export (CSV), custom fields | ⬜ |
-| CRM forms (public form that creates leads) | ⬜ |
-| Smart processes (your own CRM item types with stages) | ⬜ |
-| Sales funnel & manager analytics | 🟡 |
-| Inventory: warehouses, stock receipts, sales orders, transfers, write-offs, stock analytics | ⬜ |
+| Several pipelines, deal views: kanban / list / activities / calendar | ✅ |
+| Activities with deadlines (call, meeting, to-do) and "My activities" | ✅ |
+| Product catalog, products on deals | ✅ |
+| Estimates (quotes) and invoices, printable PDF | ✅ |
+| Vendors | ✅ (signing parties: with e-signature, phase 4) |
+| History / audit log, recycle bin, duplicates and merge | ✅ |
+| Import / export (CSV), custom fields | ✅ |
+| CRM forms (public form, QR code, embed; answers become leads) | ✅ |
+| Smart processes (your own CRM item types with stages) | ✅ |
+| Sales funnel & manager analytics | ✅ |
+| Inventory: warehouses, stock receipts, sales orders, transfers, write-offs, stock analytics | ✅ |
 | Sales channels, speech analytics, sales scripts | 🚫 / ⬜ |
 | Sites & online stores, payments & delivery | 🚫 |
 | Marketing: campaigns (email/SMS), segments, ads, templates, blacklist | ⬜ segments & campaign drafts possible; 🚫 actual sending |
@@ -118,7 +118,7 @@ Checked against the live Bitrix24 portal (all left-menu sections, their tabs and
 
 ## Build plan
 1. ✅ **Daily work** (shipped 21 Nov 2026): Tasks (calendar / Gantt / planner views, participants & observers, subtasks, tags, reminders, recurring, templates, time tracking, approval, files), Calendar (day view, invitations with accept/decline, recurring events, reminders), Messenger (group chats, replies, pins, files, search, read receipts, task chats), Feed (event & file posts, recipients, read receipts, @mentions).
-2. **Sales**: several pipelines, products & catalog, estimates & invoices with PDF, activities, import/export, custom fields, CRM web forms, Booking, Inventory.
+2. ✅ **Sales** (shipped 21 Nov 2026): several pipelines, products & catalog, estimates & invoices with PDF, activities, import/export, custom fields, CRM web forms, Booking, Inventory.
 3. **Company**: work reports, schedules, meetings & briefings, leave approvals, org chart, project spaces (workgroups + Scrum), Lists & RPA processes, access permissions.
 4. **Extras**: analytics dashboards, whiteboards, e-signature, marketing segments, knowledge base, AI helpers.
 

@@ -333,3 +333,7 @@ body.no-motion .nt-card, body.no-motion .nt-ask { animation: none; }
 html.no-pages [data-action="new"], html.no-pages [data-action="templates"], html.no-pages [data-action="trash"],
 html.no-pages #favSection, html.no-pages #pageSection,
 html.no-pages #favBtn, html.no-pages #outlineBtn, html.no-pages #pageMenuBtn, html.no-pages #shareBtn, html.no-pages #outline { display: none !important; }
+
+/* stacking inside #layer: side panels (2) < dialogs (4) < menus and pickers (6) — a form opened from a panel shows on top */
+.backdrop { z-index: 4; }
+.pop { z-index: 6; }
