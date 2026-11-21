@@ -459,3 +459,5 @@ html[data-theme=dark] .gd-mark.gd-big { filter: drop-shadow(0 4px 12px rgba(0, 0
   .gd-state { margin: 12px auto; padding: 26px 18px 22px; }
   .gd-frame-note { bottom: 8px; font-size: 12px; }
 }
+
+.gd-heads-up { max-width: 460px; margin: 12px auto 0; font-size: 12.5px; line-height: 1.5; text-align: center; color: var(--text-2, inherit); opacity: .85; }

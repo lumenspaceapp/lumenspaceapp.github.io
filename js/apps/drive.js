@@ -1381,7 +1381,8 @@
       const openBtn = () => h("a", { class: "btn", href: safeUrl(lvOpenUrl(lf)), target: "_blank", rel: "noopener noreferrer" }, "Open in Google Drive ↗");
       const privacy = "Lumen reads this folder with your own Google account; nothing is copied into Lumen.";
       if (st === "unavailable") return body.replaceChildren(gState("Google Drive isn't set up yet", "The site owner needs to add a Google sign-in client ID before folders can be shown live here.", openBtn()));
-      if (st === "off") return body.replaceChildren(gState("Connect Google Drive to see this folder", privacy, h("button", { class: "btn primary", text: "Connect Google Drive", onclick: () => lvConnect() }), openBtn()));
+      if (st === "off") return body.replaceChildren(gState("Connect Google Drive to see this folder", privacy, h("button", { class: "btn primary", text: "Connect Google Drive", onclick: () => lvConnect() }), openBtn()),
+        h("p", { class: "gd-heads-up", text: "Heads-up: Google will say “Google hasn’t verified this app”. That's expected for Lumen. Click Advanced, then Go to lumen-notes, and allow access. You only do this once." }));
       if (st === "expired") return body.replaceChildren(gState("Your Google Drive session ended", "Reconnect to keep this folder live. " + privacy, h("button", { class: "btn primary", text: "Reconnect", onclick: () => lvConnect() }), openBtn()));
       const e = lv.err, retry = () => h("button", { class: "btn primary", text: "Try again", onclick: () => { lvReset(); paintLive(); lvLoad(); } });
       if (e && !lv.items) {
