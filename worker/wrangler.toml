@@ -11,3 +11,11 @@ FIREBASE_PROJECT_ID = "lumen-notes-cde2c"
 
 # The Anthropic API key is NOT stored here. Set it as a secret:
 #   npx wrangler secret put ANTHROPIC_API_KEY
+
+# Public Lumen API (/v1/*, worker/src/api.js, guide in docs/API.md) needs one more secret: a Google service-account
+# JSON key for this Firebase project (Firebase console -> Project settings -> Service accounts -> Generate new private key).
+# It is NOT stored here either. Set it from the downloaded file (or paste it in the Cloudflare dashboard as a Secret):
+#   PowerShell:  Get-Content .\service-account.json -Raw | npx wrangler secret put FIREBASE_SERVICE_ACCOUNT
+#   macOS/Linux: npx wrangler secret put FIREBASE_SERVICE_ACCOUNT < service-account.json
+# The API uses FIREBASE_PROJECT_ID above as the Firestore project. Optional: set LUMEN_API_URL in js/firebase-config.js
+# only if the API runs on a different worker than LUMI_AI_URL.

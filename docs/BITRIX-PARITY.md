@@ -123,3 +123,14 @@ Checked against the live Bitrix24 portal (all left-menu sections, their tabs and
 4. ✅ **Extras** (built 22 Nov 2026): analytics dashboards, whiteboards, e-signature, marketing segments, knowledge base, AI helpers.
 
 Limits to keep in mind: on Firebase's free plan a workspace gets about 50,000 reads and 20,000 writes a day and 1 GB of storage, which is plenty for a small team but not for big files or large customer lists.
+
+## Enterprise plan (Bitrix24) — what Lumen covers
+| Enterprise item | Lumen |
+|---|---|
+| Multi-level permissions, custom branding, encryption at rest | ✅ (levels + per-app access enforced by the database; Settings → My workspace; Firebase encrypts at rest) |
+| Login history | ✅ Settings → Sign-in history (js/login-log.js) |
+| Active Directory integration | ✅ Microsoft 365 / Entra ID sign-in (switch on in js/firebase-config.js after enabling Microsoft in Firebase) |
+| 30-day backup period | ✅ Settings → Backups: daily backups to an admin's Google Drive, keep 7–90 days, export / restore (js/backups.js) |
+| Unlimited branch accounts + centralized management | ✅ Settings → Branches (js/branches.js) |
+| API boost | ✅ REST API with per-workspace keys on the Lumen worker (docs/API.md, worker/src/api.js) — needs the worker deployed |
+| 3 TB storage, distributed servers, SLA, priority support | ❌ hosting/service items, not software (Google Cloud scaling applies; a storage upgrade needs Firebase's paid plan) |

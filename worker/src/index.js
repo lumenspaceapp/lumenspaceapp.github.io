@@ -4,10 +4,12 @@
    POST /assist  { task, input, context?, tone? }                CoPilot-style writing helpers (js/ai.js)
    Both need  Authorization: Bearer <Firebase ID token>, share one per-user rate limit and answer as a plain-text stream.
    /assist only runs the tasks in ASSIST_TASKS (unknown task → 400) and builds the prompt here. If it fails or is declined
-   after streaming started, it writes "\u0000" followed by a short message, so the client can tell an error from the answer. */
+   after streaming started, it writes "\u0000" followed by a short message, so the client can tell an error from the answer.
+   /v1/*  the public Lumen API (API keys, any origin): handled entirely by ./api.js, see docs/API.md. */
 import Anthropic from "@anthropic-ai/sdk";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import KB from "./kb.js";
+import { handleApi } from "./api.js";
 
 const MODEL = "claude-opus-5-5";
 const MAX_TURNS = 12, MAX_CHARS = 2000;
@@ -135,7 +137,10 @@ function streamAnswer(env, headers, { system, messages, maxTokens, refusal, errP
 }
 
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
+    // The public API has its own auth (API keys) and CORS (any origin), so it is routed before everything else.
+    const path = new URL(req.url).pathname;
+    if (path === "/v1" || path.startsWith("/v1/")) return handleApi(req, env, ctx);
     const origin = req.headers.get("Origin") || "", headers = cors(env, origin);
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers });
     const url = new URL(req.url);

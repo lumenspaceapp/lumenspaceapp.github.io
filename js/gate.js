@@ -28,6 +28,12 @@
       const ok = await window.Cloud?.signIn?.();
       if (!ok) { google.disabled = false; google.lastChild.textContent = " Continue with Google"; }
     } }, h("span", { class: "gate-g", html: '<svg viewBox="0 0 24 24" width="18" height="18"><path fill="#EA4335" d="M12 10.2v3.9h5.5c-.2 1.3-1.6 3.9-5.5 3.9-3.3 0-6-2.7-6-6.1s2.7-6.1 6-6.1c1.9 0 3.1.8 3.9 1.5l2.6-2.5C16.9 3.3 14.7 2.3 12 2.3 6.6 2.3 2.3 6.6 2.3 12s4.3 9.7 9.7 9.7c5.6 0 9.3-3.9 9.3-9.5 0-.6-.1-1.1-.2-1.6H12z"/></svg>' }), " Continue with Google");
+    // Microsoft 365 / Entra ID work accounts (Active Directory), when the site owner switched it on in js/firebase-config.js
+    const ms = window.MICROSOFT_SIGNIN ? h("button", { class: "btn gate-wide gate-ms", onclick: async () => {
+      ms.disabled = true; ms.lastChild.textContent = " Signing in…";
+      const ok = await window.Cloud?.signIn?.("microsoft");
+      if (!ok) { ms.disabled = false; ms.lastChild.textContent = " Continue with Microsoft"; }
+    } }, h("span", { class: "gate-g", html: '<svg viewBox="0 0 23 23" width="17" height="17"><path fill="#f25022" d="M1 1h10v10H1z"/><path fill="#7fba00" d="M12 1h10v10H12z"/><path fill="#00a4ef" d="M1 12h10v10H1z"/><path fill="#ffb900" d="M12 12h10v10H12z"/></svg>' }), " Continue with Microsoft") : null;
     const inp = h("input", { class: "menu-input gate-input", type: "email", placeholder: "you@company.com", autocomplete: "email", value: localStorage.getItem("lumen-invite-email") || "" });
     const msg = h("div", { class: "gate-msg" });
     const send = h("button", { class: "btn gate-wide", text: "Email me a sign-in link", onclick: async () => {
@@ -43,7 +49,7 @@
     el.replaceChildren(card(
       h("h1", { text: "Welcome to Lumen" }),
       h("p", { class: "gate-sub", text: "Your team's tasks, chat, calendar, CRM and files in one place. Sign in to continue." }),
-      google,
+      google, ms,
       links ? h("div", { class: "gate-or" }, h("span", { text: "or" })) : null,
       links ? inp : null, links ? send : null, msg,
       h("p", { class: "gate-fine", text: "Invited by a teammate? Sign in with the email address the invite was sent to." }),

@@ -143,3 +143,111 @@ Feature keys for `Prefs.tool(app, feature)`:
 - automation: rules, approvals, rpa, lists
 - chat: calls; feed: polls, appreciation; drive: versions; calendar: rooms
 Apps whose `tools[app].on === false` disappear from the sidebar and show "This tool is switched off" (owner/admins see a link to Settings → Tools).
+
+
+---
+
+# Enterprise features (sign-in history, Microsoft sign-in, backups, branches, public API)
+
+Goal: match the Bitrix24 Enterprise plan where software can: login history, Active Directory (Microsoft Entra ID) sign-in,
+30-day backups, branch accounts with centralized management, and an API. Read the "Globals" and "Rules for builders"
+sections above first; they still apply (vanilla JS, `UI.h`, glass look, no new libraries, no build step, friendly copy).
+
+## Where each feature lives (one owner per file: edit ONLY your files)
+| Feature | Files (owner) |
+|---|---|
+| Sign-in history + Microsoft sign-in | js/login-log.js, css/enterprise.css, js/gate.js, js/cloud.js (lead) |
+| Backups | js/backups.js, css/backups.css (backups builder) |
+| Branches | js/branches.js, css/branches.css (branches builder) |
+| Public API | js/api-keys.js, css/api-keys.css, worker/src/api.js, worker/src/index.js (routing only), docs/API.md (API builder) |
+| Firestore rules, help-kb, settings.js, index.html | lead only (script and CSS tags are already in index.html) |
+
+## Settings hook (already wired by the lead)
+Settings has sections `signins`, `backups`, `branches` and `api` (workspace group, only in shared workspaces). Each calls
+`window.<Name>.draw(ctx, kit)` and shows what it returns (an array of elements, usually `kit.card(...)`s):
+`window.LoginLog`, `window.Backups`, `window.Branches`, `window.ApiKeys`.
+`kit = Apps.SettingsKit = { card(title, desc, ...kids), row(title, desc, control), sw(on, fn, label), seg(opts, val, fn), sel(opts, val, fn),
+txt(val, fn, attrs), lockable(...kids) (disabled fieldset for non-admins), lockNote(), admin() (may change workspace settings),
+shared(), saved(msg) (green "Saved" pill), wsSave(section, patch), markWrite() }`.
+`ctx.redraw()` redraws your section. Settings redraws live when `settings` or `people` change; call `kit.markWrite()` before your own
+writes so a redraw doesn't fight the user. Admin-only actions: check `Apps.isAdmin()` (owner or Level 1 admin) and say why when not allowed.
+Look at js/apps/settings.js for examples (security(), ai(), company()) and css/settings.css for the classes (.st-card, .st-row, .st-empty ...).
+Your draw() is synchronous: start async loads, return placeholders, then fill them in (or call ctx.redraw()) when data arrives; cache results
+in module variables so redraws don't refetch every time.
+
+## Data contract (the lead publishes rules that enforce exactly this)
+- Workspace doc `workspaces/{ws}`: new fields
+  - `branches: [wsId]` on a head office, `parent: wsId` on a branch, `branchLabel: string` (optional, e.g. "Mumbai office").
+  - Only the owner or an admin may change `branches`, `parent`, `branchLabel`. Admin writes must include `roleEdit: ""` when you are an
+    admin and not the owner (same pattern as `adminWrite()` in js/cloud.js).
+- `settings/backup` (admin-only writes, everyone in the workspace can read):
+  `{ auto: bool, keepDays: number (default 30), lastAt: ms, lastBy: email, lastFile: { id, name, size }, folderId: string, folderBy: email }`.
+- `apikeys/{keyId}` (only owner and admins can read or write; the Worker reads it with a service account):
+  `{ name, hash (hex SHA-256 of the whole key), last4, scopes: ["read"] | ["read","write"], collections: [] (empty = every allowed one),
+  created: ms, by: email, revoked: bool, lastUsed: ms }`. keyId = first 24 hex chars of the hash.
+  Key format shown ONCE to the admin: `lmn_<wsId>_<40 random [A-Za-z0-9] chars>` (crypto.getRandomValues). Never store the plain key.
+- `logins/{id}` (lead): `{ email, at, kind: "signin" | "open", provider, browser, os, device, tz, lang }`; members create their own,
+  owner/admins read all, members read their own.
+- Reading another workspace (branches) is allowed only if you are a member of it. Use `Cloud.fs.fb` (Firestore + Auth exports) and
+  `Cloud.fs.db` directly for one-off reads (getDoc, getDocs, getCountFromServer, writeBatch) instead of `Data`, which only knows the open
+  workspace. `Cloud.fs.ref()` is the open workspace's doc ref. `Cloud.workspaces` lists the workspaces I belong to (live).
+
+## Backups builder
+- Export now: read every collection in `Data.COLS` plus `pages` and the workspace doc's safe fields (name, icon, root, branchLabel)
+  with one-off `getDocs` (not `Data.list`, which caps some collections at 400). Skip `notifications`, `presence`, `logins`, `apikeys`.
+  File: `lumen-backup-<workspace-slug>-<YYYY-MM-DD-HHmm>.json` with `{ lumenBackup: 1, ws: { id, name }, at, by, counts, data: { col: { id: doc } }, pages: { id: data } }`.
+  Firestore Timestamps -> `{ __ts: ms }` (and back on restore).
+- Restore (admins only): from a local file or a Drive backup. Show a preview (workspace name, date, counts per collection), let them tick
+  collections, then write with `writeBatch` in chunks of 400 (merge, same ids; never delete existing docs). Progress bar. Confirm first.
+  Warn if the backup came from a different workspace (allowed, e.g. copying into a branch).
+- Automatic backups to Google Drive (admins switch on; "30-day backup period"): use `window.GDrive` (js/gdrive.js: connect with write scope,
+  upload, list, delete...; read it). Folder "Lumen backups - <workspace name>" in the connecting admin's Drive (save its id in settings/backup).
+  When an admin with a live Drive connection opens Lumen and `lastAt` is over 24 h ago, run a backup quietly in the background (no prompts:
+  if Drive needs reconnecting, show a small one-time notice in the section instead), then delete backups older than `keepDays`.
+  Section shows: status (last backup, by whom, size, next due), switch, keep-for (7 / 14 / 30 / 90 days), "Back up now", the list of Drive
+  backups (date, size, Restore, Open in Drive) and Export / Restore from file. Non-admins see status only.
+- Help text must be honest: backups live in the admin's own Google Drive; a browser with Lumen open is needed for automatic ones.
+
+## Branches builder ("unlimited branch accounts" + "centralized management")
+- Settings -> Branches in a head office: list of linked branches (name, label, member count, admins, open tasks count, deals count via
+  `getCountFromServer`, last activity if cheap), each with Open (switch: `Cloud.open(id)`), Invite people (email + level, written to that
+  workspace like js/cloud.js `invite()` does), Unlink.
+- "Create branch": new workspace (same shape as `create()` in js/cloud.js: name, owner = me, ownerEmail, members [me], root [], icon,
+  createdAt, plus `parent`), copy chosen settings from the head (settings/workspace sections: brand, tools, security, hours, region, people,
+  comms, ai) and optionally add chosen head members with their levels. Then add it to the head's `branches`.
+- "Link an existing workspace": pick from `Cloud.workspaces` where I'm owner or admin (roles[myEmail] === "admin" or owner === my uid),
+  not already linked, not the head itself, not already some other head's branch. Write `parent` on it and add it to the head's `branches`.
+- Centralized actions across selected branches: "Push settings" (choose sections, copy from head to each branch's settings/workspace),
+  "Announce" (post a feed item `{ kind: "announce", text, likes: [], comments: [], audience: { all: true }, readBy: [], at, by }` in each),
+  "Add a person to branches" (email + level).
+- Totals strip at the top: branches, people across all, open tasks, open deals.
+- In a branch (has `parent`): show "This is a branch of <head name>" with Open head office, and (owner/admin) Leave branch group.
+- Only owner/admins can change things; others see a read-only summary. Handle permission errors (you may not be a member of a linked
+  branch): show that row as "No access" instead of failing.
+
+## API builder
+- Settings -> API & integrations (owner/admins): create key (name, read or read+write, optional collection limits) -> show the key ONCE in a
+  copy box with a warning; list keys (name, last4, scopes, created, by, last used, Revoke). Revoke sets `revoked: true` (plus Delete).
+  Show the API base URL `window.LUMEN_API_URL || window.LUMI_AI_URL` (+ "/v1"); if empty, show the setup steps (deploy the worker, set the
+  FIREBASE_SERVICE_ACCOUNT secret) and still allow creating keys (they work once the worker is live). Include copyable curl examples.
+- Worker (worker/src/api.js, routed from worker/src/index.js for paths starting `/v1/`; keep /chat and /assist working):
+  - Auth: `Authorization: Bearer lmn_<ws>_<secret>`. SHA-256 the whole key, read `workspaces/<ws>/apikeys/<first 24 hex>`, compare full hash
+    (constant time), reject revoked. Update `lastUsed` at most once a minute.
+  - Firestore REST with a Google service-account access token: secret `FIREBASE_SERVICE_ACCOUNT` (the JSON key), sign the RS256 JWT with
+    WebCrypto (`crypto.subtle.importKey("pkcs8", ...)`), exchange at https://oauth2.googleapis.com/token, cache the token until it expires.
+    The service account bypasses rules, so the worker itself must enforce: only that workspace, only allowed collections, scopes.
+  - Endpoints: `GET /v1/me`, `GET /v1/{col}?limit=50&pageToken=`, `GET /v1/{col}/{id}`, `POST /v1/{col}` (creates; sets at, by:"api:<key name>"),
+    `PATCH /v1/{col}/{id}` (merge), `DELETE /v1/{col}/{id}`. JSON in, plain JSON out (convert Firestore typed values both ways).
+  - Allowed collections: tasks, projects, leads, deals, contacts, companies, products, quotes, activities, events, feed, inventory, bookings,
+    absences, timelog, lists, listitems, kbspaces, kbarticles, formsubs (read only). Never settings, people, apikeys, logins, presence, pages,
+    notifications. A key's `collections` limits further.
+  - Rate limit per key (e.g. 120 requests/min per instance), body size limit, clear JSON errors `{ error: { code, message } }`, CORS allowed.
+  - wrangler.toml: document the new secret in comments only. Keep `npx wrangler deploy` working; check syntax with `node --check`.
+  - docs/API.md: setup (Firebase console -> Project settings -> Service accounts -> Generate new private key; `npx wrangler secret put
+    FIREBASE_SERVICE_ACCOUNT` and paste the JSON; deploy), auth, endpoints, examples, limits. The user pastes secrets themselves.
+
+## Checks before you finish
+- `node -e "new Function(require('fs').readFileSync('js/<file>.js','utf8'))"` on every classic script you touched; `node --check` for worker files.
+- Test in the local preview if you can (server "lumen-desktop" on http://localhost:5174, wait ~9 s then run `Gate.hide()` in the console for
+  local mode; shared-workspace-only features can be checked for rendering and errors only). Other builders work in parallel on other files.
+- Don't commit or push; the lead does. Report: files changed, what works, what you could not test, any rules the lead must add.

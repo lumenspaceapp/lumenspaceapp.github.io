@@ -1,0 +1,59 @@
+/* backups (js/backups.js): Settings → Backups and the restore window. Uses the .st-* classes from css/settings.css for cards and rows. */
+
+/* progress */
+.bku-job { display: grid; gap: 6px; padding: 10px 0 12px; border-top: 1px solid var(--line); }
+.bku-job[hidden] { display: none; }
+.bku-job-t { font-size: 13px; color: var(--muted); }
+.bku-bar { height: 6px; border-radius: 999px; background: var(--hover); overflow: hidden; box-shadow: inset 0 0 0 1px var(--line); }
+.bku-bar > i { display: block; height: 100%; width: 3%; border-radius: inherit; background: var(--accent); transition: width .35s var(--ease, ease); }
+
+/* notices in the status card */
+.bku-notice { display: flex; align-items: center; gap: 12px; margin: 4px 0 10px; padding: 10px 12px; border-radius: 12px; font-size: 13px;
+  background: var(--accent-soft); border: 1px solid var(--line); }
+.bku-notice > span { flex: 1; min-width: 0; }
+.bku-notice.warn { background: color-mix(in srgb, var(--c-orange) 14%, transparent); }
+.bku-notice .btn { flex-shrink: 0; }
+
+/* Drive backups list */
+.bku-files { display: grid; padding: 2px 0 8px; }
+.bku-file { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding: 9px 2px; border-top: 1px solid var(--line); }
+.bku-file:first-child { border-top: 0; }
+.bku-file-ic { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; background: var(--hover); font-size: 16px; flex-shrink: 0; }
+.bku-file-n { flex: 1 1 170px; min-width: 0; display: grid; gap: 1px; }
+.bku-file-n b { font-weight: 500; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bku-file-n small { font-size: 12px; color: var(--muted); }
+.bku-file-acts { display: flex; gap: 6px; flex-shrink: 0; margin-left: auto; }
+.bku-file-acts a.btn { text-decoration: none; color: inherit; }
+
+/* restore window */
+.modal.bku-modal { width: min(620px, 94vw); max-height: 84vh; }
+.bku-restore { display: grid; gap: 12px; padding-top: 4px; }
+.bku-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; padding: 12px 14px; border-radius: 14px; background: var(--glass); border: 1px solid var(--line); }
+.bku-meta > div { display: grid; gap: 2px; min-width: 0; }
+.bku-meta small { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--faint); }
+.bku-meta b { font-weight: 600; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bku-warn { font-size: 13px; line-height: 1.45; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--c-orange) 14%, transparent); border: 1px solid color-mix(in srgb, var(--c-orange) 35%, transparent); }
+.bku-hint { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+.bku-cols-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.bku-cols-h b { font-size: 14px; font-weight: 600; }
+.bku-cols-acts { display: flex; gap: 6px; }
+.bku-cols { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 14px; max-height: 300px; overflow-y: auto; padding: 4px 2px; scrollbar-width: thin; }
+.bku-col { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 9px; font-size: 13.5px; cursor: pointer; }
+.bku-col:hover { background: var(--hover); }
+.bku-col input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; flex-shrink: 0; cursor: pointer; }
+.bku-col-n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bku-col-c { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.bku-restore .bku-job { border-top: 0; padding: 0; }
+.bku-result { font-size: 13px; padding: 10px 12px; border-radius: 12px; line-height: 1.45; }
+.bku-result[hidden] { display: none; }
+.bku-result.ok { background: color-mix(in srgb, var(--c-green) 14%, transparent); }
+.bku-result.warn { background: color-mix(in srgb, var(--c-orange) 14%, transparent); }
+.bku-foot { display: flex; justify-content: flex-end; gap: 8px; padding-top: 4px; }
+
+@media (max-width: 760px) {
+  .bku-file-acts { width: 100%; padding-left: 44px; }
+  .bku-file-acts .btn { flex: 1; text-align: center; justify-content: center; }
+  .bku-notice { flex-direction: column; align-items: stretch; }
+  .bku-cols { grid-template-columns: minmax(0, 1fr); max-height: 40vh; }
+  .modal.bku-modal { max-height: 92dvh; }
+}

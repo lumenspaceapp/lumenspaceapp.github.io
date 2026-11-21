@@ -118,13 +118,24 @@ async function emailInvite(email) {
 const adminWrite = () => !!Cloud.ws && Cloud.ws.owner !== Cloud.user?.uid && window.Apps?.role?.() === "admin";
 
 /* ---------- auth ---------- */
-async function signIn() {
+// kind: "google" (default) or "microsoft" (Microsoft 365 / Entra ID work accounts; needs window.MICROSOFT_SIGNIN, see firebase-config.js)
+function provider(kind) {
+  if (kind !== "microsoft") return new fb.GoogleAuthProvider();
+  const p = new fb.OAuthProvider("microsoft.com");
+  p.setCustomParameters({ prompt: "select_account", ...(window.MICROSOFT_TENANT ? { tenant: window.MICROSOFT_TENANT } : {}) });
+  return p;
+}
+async function signIn(kind = "google") {
   if (!Cloud.configured) return setupModal();
   if (!auth) return UI.toast("Still loading, try again in a second");
-  try { await fb.signInWithPopup(auth, new fb.GoogleAuthProvider()); UI.toast("Signed in as " + auth.currentUser.email); return true; }
+  kind = kind === "microsoft" ? "microsoft" : "google";
+  try { sessionStorage.setItem("lumen-signin-via", kind); } catch {} // for Settings → Sign-in history
+  try { await fb.signInWithPopup(auth, provider(kind)); UI.toast("Signed in as " + auth.currentUser.email); return true; }
   catch (e) {
-    if (e.code === "auth/popup-blocked") { UI.toast("Pop-up blocked, switching to full-page sign-in…"); await fb.signInWithRedirect(auth, new fb.GoogleAuthProvider()); return false; }
-    if (e.code !== "auth/popup-closed-by-user" && e.code !== "auth/cancelled-popup-request") UI.toast("Sign-in failed: " + (e.code || e.message));
+    if (e.code === "auth/popup-blocked") { UI.toast("Pop-up blocked, switching to full-page sign-in…"); await fb.signInWithRedirect(auth, provider(kind)); return false; }
+    if (e.code === "auth/account-exists-with-different-credential") UI.toast(`This email address already signs in with ${kind === "microsoft" ? "Google" : "Microsoft"}. Use that button instead.`);
+    else if (e.code === "auth/operation-not-allowed") UI.toast(`${kind === "microsoft" ? "Microsoft" : "Google"} sign-in isn't switched on for this site yet. Ask the site owner.`);
+    else if (e.code !== "auth/popup-closed-by-user" && e.code !== "auth/cancelled-popup-request") UI.toast("Sign-in failed: " + (e.code || e.message));
     return false;
   }
 }

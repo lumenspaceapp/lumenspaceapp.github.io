@@ -62,6 +62,8 @@
   // a block only owner/admins may change: everyone else sees it read-only
   const lockable = (...kids) => h("fieldset", { class: "st-fs", disabled: !admin() }, ...kids);
   const lockNote = () => admin() ? null : h("div", { class: "st-lock" }, h("span", { html: UI.icon("lock") }), h("span", { text: "Only the owner and admins can change these settings. You can see them here." }));
+  // Enterprise sections live in their own files (js/login-log.js, js/backups.js, js/branches.js, js/api-keys.js); they draw with these helpers
+  const ext = (name, title) => ctx => (window[name] && window[name].draw ? window[name].draw(ctx, Apps.SettingsKit) : [card(title, "", h("div", { class: "st-empty", text: "Still loading. Reload the page if this stays." }))]);
   const download = (name, text, type = "application/json") => {
     const url = URL.createObjectURL(new Blob([text], { type })), a = h("a", { href: url, download: name });
     document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
@@ -587,6 +589,10 @@
     { id: "hours", icon: "🗓️", title: "Business hours", desc: "Working day, weekend, first day of the week and holidays.", keys: "business hours working day time weekend first day week holidays india us", draw: hours, ws: true },
     { id: "region", icon: "🌍", title: "Language & region", desc: "Date and time format, time zone, currency and language.", keys: "language region date format time 24 hour time zone timezone currency money", draw: region, ws: true },
     { id: "security", icon: "🔐", title: "Security", desc: "Automatic sign-out, sign-in options and members.", keys: "security sign out inactivity idle email link sign-in members last seen presence", draw: security, ws: true },
+    { id: "signins", icon: "🕵️", title: "Sign-in history", desc: "Who signed in, when, and on which device.", keys: "sign-in login history log audit sessions devices browser security", draw: ext("LoginLog", "Sign-in history"), ws: true, show: shared },
+    { id: "backups", icon: "💾", title: "Backups", desc: "Automatic daily backups to Google Drive, export and restore.", keys: "backup backups restore export import google drive daily 30 days recovery", draw: ext("Backups", "Backups"), ws: true, show: shared },
+    { id: "branches", icon: "🏬", title: "Branches", desc: "Link branch workspaces and manage them from one place.", keys: "branches branch accounts offices centralized management head office multiple workspaces", draw: ext("Branches", "Branches"), ws: true, show: shared },
+    { id: "api", icon: "🔌", title: "API & integrations", desc: "API keys that let other tools read and write this workspace.", keys: "api keys rest integrations developer webhook token connect zapier", draw: ext("ApiKeys", "API & integrations"), ws: true, show: shared },
     { id: "ai", icon: "✨", title: "AI (CoPilot)", desc: "Where the AI assistant may help.", keys: "ai copilot lumi assistant tasks feed crm emails chat meetings knowledge", draw: ai, ws: true },
     { id: "gdpr", icon: "🛡️", title: "Privacy (GDPR)", desc: "Data protection contacts and exporting your data.", keys: "privacy gdpr data protection officer dpo export my data download", draw: gdpr, ws: true },
     { id: "members", icon: "🔑", title: "Members & levels", desc: "People, levels and permissions.", keys: "members levels access permissions roles admin manager guest invite remove owner", action: () => Apps.Access ? Apps.Access.open("people") : UI.toast("Members & levels is still loading") },
@@ -594,6 +600,8 @@
     { id: "shortcuts", icon: "⌨️", title: "Keyboard shortcuts", desc: "Work faster with the keyboard.", keys: "keyboard shortcuts keys hotkeys", draw: shortcuts },
   ];
   const visible = () => SECTIONS.filter(s => !s.id || !s.show || s.show());
+  // helpers for the Enterprise section files: same look and saving behaviour as the built-in sections
+  Apps.SettingsKit = { card, row, sw, seg, sel, txt, lockable, lockNote, admin, shared, saved, wsSave, markWrite: () => { lastWrite = Date.now(); } };
   const find = id => visible().find(s => s.id === id && s.draw);
 
   /* ---------- the page ---------- */

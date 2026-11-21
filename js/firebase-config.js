@@ -17,3 +17,9 @@ window.LUMI_AI_URL = "";
 /* Google Drive live folders: the OAuth "Web application" client ID (Google Cloud console → APIs & Services → Credentials),
    e.g. "1234-abc.apps.googleusercontent.com". Leave empty to fall back to a Firebase Google pop-up for Drive access. */
 window.GOOGLE_CLIENT_ID = "152931493861-oq06c3ijigqbam4tvt1rajke9bnldcek.apps.googleusercontent.com"; // public OAuth web client id (not a secret)
+
+/* Microsoft sign-in (Microsoft 365 / Entra ID, formerly Azure Active Directory work accounts). Turn it on in the Firebase console
+   (Authentication → Sign-in method → Microsoft, with an app registered in Microsoft Entra), then set this to true.
+   MICROSOFT_TENANT: "" lets any Microsoft account in; a tenant ID or domain (e.g. "yourcompany.onmicrosoft.com") limits it to one organization. */
+window.MICROSOFT_SIGNIN = false;
+window.MICROSOFT_TENANT = "";

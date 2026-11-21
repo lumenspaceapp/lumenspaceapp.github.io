@@ -1,0 +1,76 @@
+/* API & integrations (js/api-keys.js): Settings → API & integrations. Builds on the .st-* classes in css/settings.css. */
+
+/* status pill extras (.st-status .ok/.off live in settings.css) */
+.st-status.ak-st.warn { color: var(--c-orange); }
+.st-status.ak-st.bad { color: var(--c-red); }
+.ak-health { display: grid; justify-items: end; gap: 6px; max-width: 360px; }
+.ak-hnote { font-size: 12.5px; color: var(--muted); text-align: right; line-height: 1.45; }
+
+/* code + copy */
+.ak-codeline { display: flex; align-items: stretch; gap: 8px; margin: 0 0 12px; min-width: 0; }
+.ak-code { font-family: var(--mono); font-size: 12.5px; background: var(--code-bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; color: var(--text); min-width: 0; overflow-wrap: anywhere; }
+.ak-codeline > .ak-code { flex: 1; display: flex; align-items: center; }
+.ak-codeline.ak-pre > .ak-code { white-space: pre-wrap; line-height: 1.5; }
+.ak-code.ak-small { font-size: 12px; padding: 4px 9px; user-select: all; }
+.ak-copy { flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; align-self: flex-start; }
+.ak-copy .ico { width: 14px; height: 14px; }
+.ak-copy.ak-done { color: var(--c-green); }
+
+/* setup steps */
+.ak-steps { margin: 4px 0 6px; padding-left: 22px; display: grid; gap: 8px; font-size: 13.5px; line-height: 1.5; color: var(--text); }
+.ak-steps code, .ak-ex-t code { font-family: var(--mono); font-size: 12px; background: var(--code-bg); border-radius: 6px; padding: 1px 6px; overflow-wrap: anywhere; }
+
+/* the one-time key */
+.ak-warn { font-size: 13px; line-height: 1.5; color: var(--text); background: color-mix(in srgb, var(--c-orange) 12%, transparent); border: 1px solid color-mix(in srgb, var(--c-orange) 35%, transparent); border-radius: 12px; padding: 10px 14px; margin: 4px 0 12px; }
+.ak-warn b { color: var(--c-orange); }
+.ak-keyin { flex: 1; min-width: 0; margin: 0; font-family: var(--mono); font-size: 13px; letter-spacing: .01em; }
+
+/* keys list */
+.ak-list { display: grid; padding: 0 0 6px; }
+.ak-key { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); }
+.ak-key.revoked .ak-k-main { opacity: .6; }
+.ak-k-main { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.ak-k-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.ak-k-name { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.ak-k-last { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.ak-k-meta { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.ak-k-acts { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.ak-k-acts .icon-btn:hover { color: var(--c-red); }
+.ak-chip { display: inline-flex; align-items: center; font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--hover); color: var(--muted); border: 1px solid var(--line); white-space: nowrap; }
+.ak-chip.warn { color: var(--c-orange); }
+.ak-chip.bad { color: var(--c-red); }
+.ak-none { line-height: 1.5; }
+
+/* examples */
+.ak-ex { padding: 2px 0 0; }
+.ak-ex-t { font-size: 12.5px; font-weight: 600; color: var(--muted); margin: 0 0 5px; }
+.ak-allowed { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 0 8px; }
+.ak-allowed .ak-chip { font-family: var(--mono); font-weight: 500; cursor: help; }
+
+/* new key dialog */
+.ak-modal { width: 520px; max-width: calc(100vw - 32px); }
+.ak-form { display: grid; gap: 16px; }
+.ak-f { display: grid; gap: 4px; }
+.ak-f > b { font-size: 14px; font-weight: 600; }
+.ak-f > span { font-size: 12.5px; color: var(--muted); }
+.ak-f > .menu-input { margin: 4px 0 0; width: 100%; }
+.ak-f > .seg { justify-self: start; margin-top: 4px; }
+.ak-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; margin-top: 8px; padding: 10px 12px; border-radius: 12px; background: var(--hover); max-height: 240px; overflow-y: auto; }
+.ak-cols[hidden] { display: none; }
+.ak-col { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 3px 0; cursor: pointer; min-width: 0; }
+.ak-col input { accent-color: var(--accent); flex-shrink: 0; }
+.ak-col span { overflow: hidden; text-overflow: ellipsis; }
+.ak-err { font-size: 13px; color: var(--c-red); min-height: 0; }
+.ak-err:empty { display: none; }
+.ak-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* phones */
+@media (max-width: 760px) {
+  .ak-codeline { flex-direction: column; }
+  .ak-copy { align-self: flex-end; }
+  .ak-key { flex-direction: column; align-items: stretch; gap: 8px; }
+  .ak-k-acts { justify-content: flex-end; }
+  .ak-health { justify-items: start; max-width: none; }
+  .ak-hnote { text-align: left; }
+  .ak-cols { grid-template-columns: minmax(0, 1fr); }
+}
