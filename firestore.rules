@@ -14,8 +14,9 @@ service cloud.firestore {
       function wsManager(d) { return wsRole(d) == 'manager'; }
       function touched() { return request.resource.data.diff(resource.data).affectedKeys(); }
       function inviteRule() {
-        let s = /databases/$(database)/documents/workspaces/$(ws)/settings/workspace;
-        return exists(s) ? get(s).data.get('people', {}).get('invite', 'managers') : 'managers';
+        return exists(/databases/$(database)/documents/workspaces/$(ws)/settings/workspace)
+          ? get(/databases/$(database)/documents/workspaces/$(ws)/settings/workspace).data.get('people', {}).get('invite', 'managers')
+          : 'managers';
       }
       // adding people (never removing): managers unless invites are admins-only; members and managers when everyone may invite
       function addsMembersOnly() { return touched().hasOnly(['members']) && request.resource.data.members.hasAll(resource.data.members); }
