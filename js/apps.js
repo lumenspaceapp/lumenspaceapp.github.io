@@ -184,7 +184,103 @@
     setTimeout(() => inp.focus(), 30);
   }
 
-  /* form modal: fields = [{ key, label, type: text|textarea|select|date|time|number|person|color|checkbox, options, placeholder }] */
+  /* pick several people: selected = array of person keys; onChange(keys) runs on every tick */
+  function peoplePicker(anchor, selected, onChange, opts = {}) {
+    const sel = new Set(selected || []);
+    const inp = h("input", { class: "menu-input", placeholder: opts.placeholder || "Search people…" }), list = h("div", { class: "pp-list" });
+    const draw = () => {
+      list.innerHTML = ""; const q = inp.value.toLowerCase();
+      Data.people().filter(p => !(opts.exclude || []).includes(p.key) && (p.name + p.email).toLowerCase().includes(q)).forEach(p => {
+        const on = sel.has(p.key);
+        list.append(h("button", { class: "mi compact" + (on ? " on" : ""), onclick: () => { on ? sel.delete(p.key) : sel.add(p.key); onChange([...sel]); draw(); } },
+          h("span", { class: "pp-check", text: on ? "✓" : "" }), avatar(p, 22), h("span", { class: "mi-t", text: p.name + (p.key === Data.me().key ? " (you)" : "") }), h("span", { class: "mi-k", text: p.title || "" })));
+      });
+      if (!list.children.length) list.append(h("div", { class: "menu-empty", text: "Nobody found" }));
+    };
+    inp.addEventListener("input", draw); draw();
+    const api = UI.popover(anchor, h("div", { style: { width: "280px" } }, inp, list));
+    setTimeout(() => inp.focus(), 30);
+    return api;
+  }
+  // a row of small avatars for a list of person keys
+  function avatars(keys, size = 22, max = 5) {
+    keys = (keys || []).filter(Boolean);
+    const el = h("span", { class: "av-stack" }, ...keys.slice(0, max).map(k => avatar(Data.person(k), size)));
+    if (keys.length > max) el.append(h("span", { class: "av-more", text: "+" + (keys.length - max) }));
+    return el;
+  }
+
+  /* ---------- file attachments (stored like Drive files, outside Drive's folders) ---------- */
+  const MAX_FILE = 700 * 1024;
+  const fileSize = n => n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : n > 1024 ? Math.round(n / 1024) + " KB" : (n || 0) + " B";
+  function pickFiles(multiple = true) {
+    return new Promise(res => {
+      const i = h("input", { type: "file", style: { display: "none" } }); i.multiple = multiple;
+      i.onchange = () => { res([...i.files]); i.remove(); };
+      document.body.append(i); i.click();
+    });
+  }
+  // upload File objects; returns [{ id, name, type, size }] to keep on a task / message / post
+  async function attach(files) {
+    const out = [];
+    for (const f of files || []) {
+      if (f.size > MAX_FILE) { UI.toast(`“${f.name}” is ${fileSize(f.size)}. Files can be up to 700 KB on the free plan; share bigger ones as a link.`); continue; }
+      const data = await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(f); });
+      const id = await Data.add("files", { name: f.name, type: f.type || "application/octet-stream", size: f.size, data, folder: "__attachments" });
+      out.push({ id, name: f.name, type: f.type || "", size: f.size });
+    }
+    return out;
+  }
+  function openFile(att) {
+    const f = Data.get("files", att.id);
+    if (!f) return UI.toast("That file is no longer available");
+    if (f.type === "link") return window.open(f.url, "_blank", "noopener");
+    fetch(f.data).then(r => r.blob()).then(b => {
+      const u = URL.createObjectURL(b);
+      if (/^(image|video|audio)\/|pdf|^text\//.test(f.type)) window.open(u, "_blank", "noopener");
+      else { const a = h("a", { href: u, download: f.name }); document.body.append(a); a.click(); a.remove(); }
+      setTimeout(() => URL.revokeObjectURL(u), 60000);
+    });
+  }
+  // a clickable chip for an attachment; images show a small preview
+  function fileChip(att, onRemove) {
+    const f = Data.get("files", att.id), img = f && /^image\//.test(f.type) && f.data;
+    const ic = /pdf/.test(att.type) ? "📕" : /sheet|excel|csv/.test(att.type) ? "📊" : /word|document/.test(att.type) ? "📄" : /zip/.test(att.type) ? "🗜️" : "📎";
+    return h("span", { class: "file-chip" + (img ? " img" : ""), title: att.name, onclick: e => { if (!e.target.closest(".fc-x")) openFile(att); } },
+      img ? h("img", { src: f.data, alt: "" }) : h("span", { class: "fc-ic", text: ic }),
+      h("span", { class: "fc-n", text: att.name }), h("small", { text: fileSize(att.size) }),
+      onRemove ? h("button", { class: "fc-x", type: "button", title: "Remove", text: "×", onclick: e => { e.stopPropagation(); onRemove(att); } }) : null);
+  }
+
+  /* ---------- @mentions ---------- */
+  const handleOf = p => (p.name || "").split(" ")[0].toLowerCase();
+  const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // person keys mentioned as @firstname in a text
+  function mentioned(text) {
+    const t = String(text || "").toLowerCase();
+    return Data.people().filter(p => handleOf(p) && new RegExp("@" + reEsc(handleOf(p)) + "(?![\\w.-])").test(t)).map(p => p.key);
+  }
+  // typing "@" in an input/textarea suggests teammates
+  function mentionAssist(input) {
+    let pop = null;
+    const close = () => { if (pop) { pop.close?.(); pop = null; } };
+    input.addEventListener("input", () => {
+      const pos = input.selectionStart, before = input.value.slice(0, pos), m = before.match(/(^|\s)@([\w.-]*)$/);
+      if (!m) return close();
+      const q = m[2].toLowerCase(), ppl = Data.people().filter(p => p.key !== Data.me().key && (p.name + " " + p.email).toLowerCase().includes(q)).slice(0, 6);
+      close(); if (!ppl.length) return;
+      pop = UI.popover(input, h("div", { style: { width: "240px" } }, ...ppl.map(p => h("button", { class: "mi compact", onmousedown: e => {
+        e.preventDefault();
+        const start = pos - m[2].length - 1, ins = "@" + handleOf(p) + " ";
+        input.value = input.value.slice(0, start) + ins + input.value.slice(pos);
+        input.selectionStart = input.selectionEnd = start + ins.length; close(); input.focus(); input.dispatchEvent(new Event("input"));
+      } }, avatar(p, 20), h("span", { class: "mi-t", text: p.name })))), { align: "start" });
+    });
+    input.addEventListener("blur", () => setTimeout(close, 150));
+    input.addEventListener("keydown", e => { if (e.key === "Escape") close(); });
+  }
+
+  /* form modal: fields = [{ key, label, type: text|textarea|select|date|time|number|person|people|color|checkbox, options, placeholder }] */
   function form(title, fields, values = {}, opts = {}) {
     return new Promise(resolve => {
       const v = { ...values }; let done = false;
@@ -200,6 +296,12 @@
           ctl = h("button", { class: "menu-input f-person", type: "button" });
           const paint = () => { ctl.innerHTML = ""; const p = v[f.key] ? Data.person(v[f.key]) : null; ctl.append(p ? avatar(p, 20) : "", h("span", { text: p ? p.name : "Choose someone…" })); };
           ctl.onclick = () => personPicker(ctl, p => { v[f.key] = p ? p.key : ""; paint(); }, { allowNone: true }); paint();
+        }
+        else if (f.type === "people") {
+          ctl = h("button", { class: "menu-input f-person", type: "button" });
+          if (!Array.isArray(v[f.key])) v[f.key] = [];
+          const paint = () => { ctl.innerHTML = ""; const ks = v[f.key]; ctl.append(ks.length ? avatars(ks, 20) : "", h("span", { text: ks.length ? ks.map(k => Data.person(k).name.split(" ")[0]).join(", ") : (f.placeholder || "Choose people…") })); };
+          ctl.onclick = () => peoplePicker(ctl, v[f.key], ks => { v[f.key] = ks; paint(); }); paint();
         }
         else if (f.type === "color") { ctl = h("div", { class: "accents" }, ...PALETTE.map(c => h("button", { type: "button", class: v[f.key] === c ? "on" : "", style: { background: c, color: c }, onclick: e => { v[f.key] = c; ctl.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === e.currentTarget)); } }))); if (!v[f.key]) v[f.key] = PALETTE[0], ctl.firstChild.classList.add("on"); }
         else if (f.type === "avatar") {
@@ -266,7 +368,8 @@
     if (v) { Data.setAvatar(v.avatar); UI.toast("✨ Avatar updated"); }
   }
 
-  Object.assign(Apps, { chooseAvatar, avatar, colorFor, personPicker, form, panel, header, tabs, iso, today, addDays, fmtDate, money, currency, empty });
+  Object.assign(Apps, { chooseAvatar, avatar, avatars, colorFor, personPicker, peoplePicker, form, panel, header, tabs, iso, today, addDays, fmtDate, money, currency, empty,
+    pickFiles, attach, openFile, fileChip, fileSize, mentioned, mentionAssist, handleOf });
 
   Apps.init = () => { renderNav(); initBell(); };
   window.Apps = Apps;

@@ -54,7 +54,7 @@
       viewBtn.textContent = grid ? "☰ List" : "▦ Grid";
       crumbs.replaceChildren(h("button", { class: "crumb", text: "🗂️ Drive", onclick: () => { folder = ""; draw(); } }), ...path(folder).flatMap(f => [h("span", { class: "crumb-sep", text: "/" }), h("button", { class: "crumb", text: f.name, onclick: () => { folder = f.id; draw(); } })]));
       const folders = Data.list("folders").filter(f => q ? f.name.toLowerCase().includes(q) : (f.parent || "") === folder).sort((a, b) => a.name.localeCompare(b.name));
-      const files = Data.list("files").filter(f => q ? f.name.toLowerCase().includes(q) : (f.folder || "") === folder).sort((a, b) => b.at - a.at);
+      const files = Data.list("files").filter(f => f.folder !== "__attachments" && (q ? f.name.toLowerCase().includes(q) : (f.folder || "") === folder)).sort((a, b) => b.at - a.at);
       if (!folders.length && !files.length) return body.replaceChildren(Apps.empty("🗂️", q ? "No files match." : "Drop files here, or use Upload. Images, PDFs and docs up to 700 KB.", h("button", { class: "btn primary", text: "⬆ Upload", onclick: () => file.click() })));
       const tile = (f, isFolder, i) => {
         const thumb = isFolder ? h("div", { class: "dt-ic", text: "📁" }) : /^image\//.test(f.type) ? h("div", { class: "dt-img", style: { backgroundImage: `url("${f.data}")` } }) : h("div", { class: "dt-ic", text: ICON(f.type) });

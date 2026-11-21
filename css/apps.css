@@ -308,3 +308,21 @@
 .chat-compose > .icon-btn { width: 44px; border-radius: 12px; font-size: 19px; display: grid; place-items: center; padding: 0; }
 .chat-compose > .btn { padding: 0 20px; border-radius: 12px; }
 .chat-input::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ===== shared: people picker, avatar stacks, file chips ===== */
+.pp-list { max-height: 300px; overflow-y: auto; }
+.pp-list .mi.on { background: var(--accent-soft); }
+.pp-check { width: 16px; height: 16px; flex: none; border-radius: 5px; border: 1.5px solid var(--line); display: grid; place-items: center; font-size: 11px; font-weight: 800; color: #fff; }
+.pp-list .mi.on .pp-check { background: var(--accent); border-color: var(--accent); }
+.av-stack { display: inline-flex; align-items: center; }
+.av-stack > .avatar { box-shadow: 0 0 0 2px var(--glass-strong); }
+.av-stack > .avatar + .avatar { margin-left: -6px; }
+.av-more { margin-left: 4px; font-size: 11px; color: var(--muted); font-weight: 600; }
+.file-chip { display: inline-flex; align-items: center; gap: 7px; max-width: 260px; padding: 5px 8px 5px 6px; border-radius: 10px; border: 1px solid var(--line); background: var(--glass); cursor: pointer; font-size: 12.5px; vertical-align: middle; }
+.file-chip:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.file-chip .fc-ic { font-size: 16px; }
+.file-chip img { width: 30px; height: 30px; object-fit: cover; border-radius: 6px; }
+.file-chip .fc-n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; font-weight: 550; }
+.file-chip small { color: var(--muted); flex: none; }
+.file-chip .fc-x { border: 0; background: none; color: var(--muted); font-size: 15px; cursor: pointer; padding: 0 2px; }
+.file-list { display: flex; flex-wrap: wrap; gap: 6px; }
