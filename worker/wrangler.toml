@@ -19,3 +19,13 @@ FIREBASE_PROJECT_ID = "lumen-notes-cde2c"
 #   macOS/Linux: npx wrangler secret put FIREBASE_SERVICE_ACCOUNT < service-account.json
 # The API uses FIREBASE_PROJECT_ID above as the Firestore project. Optional: set LUMEN_API_URL in js/firebase-config.js
 # only if the API runs on a different worker than LUMI_AI_URL.
+
+# Branded invite emails (src/invite.js, POST /invite). Optional: without these, Lumen sends Firebase's plain sign-in email.
+# Uses the FIREBASE_SERVICE_ACCOUNT secret above, plus one email service:
+#   Brevo (free, 300 emails/day; verify a sender address in Brevo → Senders):  npx wrangler secret put BREVO_API_KEY
+#   or Resend (needs your own domain verified):                                npx wrangler secret put RESEND_API_KEY
+# and these vars (uncomment under [vars] above, or add them in the Cloudflare dashboard → Worker → Settings → Variables):
+#   MAIL_FROM = "invites@yourdomain.com"      # the verified sender address
+#   MAIL_FROM_NAME = "Lumen"                  # shown as the sender name
+#   SITE_URL = "https://lumenspaceapp.github.io"
+#   BRAND_NAME = "Lumen"                      # product name used in the email

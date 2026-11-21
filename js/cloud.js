@@ -109,6 +109,20 @@ Cloud.emailSignIn = async email => {
   localStorage.setItem("lumen-invite-email", email);
   await fb.sendSignInLinkToEmail(auth, email, { url: `${location.origin}${location.pathname}?signin=1`, handleCodeInApp: true });
 };
+// true when the worker sent it; false (quietly) when the worker or its email service isn't set up or fails, so the caller falls back
+async function brandedInvite(email) {
+  const base = (window.LUMEN_API_URL || window.LUMI_AI_URL || "").replace(/\/+$/, "");
+  if (!base || !Cloud.user || !Cloud.ws) return false;
+  try {
+    const token = await Cloud.user.getIdToken();
+    const res = await fetch(base + "/invite", { method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ ws: Cloud.ws.id, email }) });
+    if (res.ok) return true;
+    const j = await res.json().catch(() => ({}));
+    if (res.status === 429 && j.message) { UI.toast(j.message); return true; } // just sent: don't send a second, plain one
+    if (j.error !== "mail_not_configured") console.warn("invite email", res.status, j);
+  } catch (e) { console.warn("invite email", e); }
+  return false;
+}
 async function emailInvite(email) {
   const url = `${location.origin}${location.pathname}?ws=${Cloud.ws.id}`;
   await fb.sendSignInLinkToEmail(auth, email, { url, handleCodeInApp: true });
@@ -317,6 +331,8 @@ async function sendInvite(email) {
   // Settings → Security → email-link sign-in switched off: no emailed sign-in link, just the workspace link to open with Google
   if (wsPref("security.emailLinks") === false) return sendInviteDialog(email, "Email sign-in links are switched off for this workspace.");
   UI.toast(`Sending invite to ${email}…`);
+  // the branded invite email from the Lumen worker (worker/src/invite.js); when it isn't set up, Firebase's plain sign-in email
+  if (await brandedInvite(email)) return UI.toast(`✉️ Invite emailed to ${email}`);
   try { await emailInvite(email); UI.toast(`✉️ Invite emailed to ${email}`); }
   catch (e) {
     console.warn(e);

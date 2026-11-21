@@ -28,7 +28,8 @@ const LAST_USED_MS = 60 * 1000;                    // write lastUsed at most onc
 const KEY_RE = /^lmn_([A-Za-z0-9]{1,64})_([A-Za-z0-9]{40})$/;
 const ID_RE = /^[A-Za-z0-9_\-.:@|+]{1,200}$/;
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
-const SCOPE = "https://www.googleapis.com/auth/datastore";
+// datastore: Firestore REST; identitytoolkit: one-click sign-in links for invite emails (worker/src/invite.js)
+const SCOPE = "https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/identitytoolkit";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",               // keys are bearer tokens (no cookies), so any site or tool may call
@@ -38,7 +39,7 @@ const CORS = {
   "Access-Control-Max-Age": "86400",
 };
 
-class ApiError extends Error {
+export class ApiError extends Error {
   constructor(status, code, message, headers) { super(message); this.status = status; this.code = code; this.headers = headers || {}; }
 }
 const reply = (status, body, extra) => new Response(body === null ? null : JSON.stringify(body), {
@@ -146,7 +147,7 @@ export async function signJwt(sa, now = Math.floor(Date.now() / 1000)) {
   const sig = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(input));
   return input + "." + b64url(sig);
 }
-async function accessToken(env) {
+export async function accessToken(env) {
   const sa = serviceAccount(env);
   if (tokenCache && tokenCache.email === sa.client_email && tokenCache.exp - 120000 > Date.now()) return tokenCache.token;
   if (tokenPending) return tokenPending;
@@ -169,7 +170,7 @@ function docsBase(env) {
   const project = env.FIREBASE_PROJECT_ID || serviceAccount(env).project_id;
   return `https://firestore.googleapis.com/v1/projects/${enc(project)}/databases/(default)/documents`;
 }
-async function fsCall(env, method, path, { query, body } = {}) {
+export async function fsCall(env, method, path, { query, body } = {}) {
   const token = await accessToken(env);
   const url = docsBase(env) + "/" + path + (query && String(query) ? "?" + query : "");
   const res = await fetch(url, { method, headers: { Authorization: "Bearer " + token, ...(body ? { "Content-Type": "application/json" } : {}) }, body: body ? JSON.stringify(body) : undefined });

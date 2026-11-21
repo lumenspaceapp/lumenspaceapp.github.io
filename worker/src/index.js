@@ -1,6 +1,7 @@
 /* Lumi AI: a Cloudflare Worker that lets signed-in Lumen users chat with Claude.
    The Anthropic API key never leaves this worker (it's a Cloudflare secret).
    POST /chat    { messages: [{role, content}], state: "…" }   the Lumi help chat (js/help.js)
+   POST /invite  { ws, email, note? }                         branded invite email with a one-click sign-in link (invite.js)
    POST /assist  { task, input, context?, tone? }                CoPilot-style writing helpers (js/ai.js)
    Both need  Authorization: Bearer <Firebase ID token>, share one per-user rate limit and answer as a plain-text stream.
    /assist only runs the tasks in ASSIST_TASKS (unknown task → 400) and builds the prompt here. If it fails or is declined
@@ -10,6 +11,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import KB from "./kb.js";
 import { handleApi } from "./api.js";
+import { handleInvite } from "./invite.js";
 
 const MODEL = "claude-opus-5-5";
 const MAX_TURNS = 12, MAX_CHARS = 2000;
@@ -145,6 +147,13 @@ export default {
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers });
     const url = new URL(req.url);
     if (url.pathname === "/health") return json(200, { ok: true, model: MODEL }, headers);
+    // branded invite emails (worker/src/invite.js): signed-in members of a workspace, from the Lumen site only
+    if (req.method === "POST" && url.pathname === "/invite") {
+      if (headers["Access-Control-Allow-Origin"] !== origin) return json(403, { error: "origin_not_allowed" }, headers);
+      const inviter = await verifyUser(req, env);
+      if (!inviter) return json(401, { error: "sign_in_required" }, headers);
+      return handleInvite(req, env, inviter, (s, b) => json(s, b, headers));
+    }
     const route = req.method === "POST" && (url.pathname === "/chat" || url.pathname === "/assist") ? url.pathname.slice(1) : null;
     if (!route) return json(404, { error: "not_found" }, headers);
     if (!headers["Access-Control-Allow-Origin"] || headers["Access-Control-Allow-Origin"] !== origin) return json(403, { error: "origin_not_allowed" }, headers);
