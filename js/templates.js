@@ -107,6 +107,11 @@
     team: { label: "With my team", icon: "👥", desc: "Projects, docs and meetings in one shared place.", picks: ["projects", "meetings", "wiki", "roadmap", "bugs", "content", "research"], defaults: ["projects", "meetings", "wiki"] },
     school: { label: "For school", icon: "🎓", desc: "Classes, assignments and exam prep.", picks: ["classes", "assignments", "study", "notes", "reading", "research"], defaults: ["classes", "assignments", "study"] },
   };
+  if (window.FEATURES?.pages === false) { // team-workspace wording while pages are switched off
+    USES.personal.desc = "Your own tasks, calendar, files and time tracking.";
+    USES.team.desc = "Tasks, chat, CRM and HR for your whole team.";
+    USES.school.desc = "Group projects, deadlines, chat and shared files.";
+  }
 
   /* ---------- build ---------- */
   function build(a) {

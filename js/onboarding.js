@@ -4,6 +4,9 @@
   const ACCENTS = ["#7c5cff", "#3b82f6", "#06b6d4", "#10b981", "#f59e0b", "#ef4444", "#ec4899", "#64748b"];
   const ICONS = ["✨", "🚀", "🌱", "🧠", "📚", "🎯", "🏡", "⚡", "🎨", "💼", "🎓", "🔥"];
   const Onboarding = { active: false };
+  const PAGES = () => window.FEATURES?.pages !== false;
+  // the team apps shown in the preview while pages are switched off
+  const APPS = [["🏠", "Home"], ["✅", "Tasks & Projects"], ["💬", "Chat & Calls"], ["📰", "Feed"], ["📅", "Calendar"], ["💼", "CRM"], ["🏢", "Company & HR"], ["📁", "Drive"], ["⚡", "Automation"]];
 
   /* opts: { accountStep, user, onGoogle(): Promise<"continue"|"done"|false>, build(answers): Promise } */
   function show(opts) {
@@ -16,7 +19,7 @@
         h("button", { class: "icon-btn ob-x", title: "Skip setup", html: UI.icon("x"), onclick: () => finish(null) }), dots, stage);
       const wrap = h("div", { class: "ob" }, h("div", { class: "ob-glow" }), card);
       document.getElementById("layer").append(wrap);
-      const steps = [...(opts.accountStep ? [welcome] : []), useStep, picksStep, styleStep];
+      const steps = [...(opts.accountStep ? [welcome] : []), useStep, ...(PAGES() ? [picksStep] : []), styleStep];
       let at = -1, done = false;
 
       function finish(val) {
@@ -49,9 +52,9 @@
         };
         return [h("div", { class: "ob-logo" }, h("img", { src: "assets/logo.svg", alt: "Lumen" })),
           h("h1", { text: "Welcome to Lumen" }),
-          h("p", { class: "ob-sub", text: "A calm, glassy home for your notes, tasks and docs. Let's set up a workspace that fits you." }),
+          h("p", { class: "ob-sub", text: PAGES() ? "A calm, glassy home for your notes, tasks and docs. Let's set up a workspace that fits you." : "One glassy place for your team's tasks, chat, calendar, CRM and files. Let's set up your workspace." }),
           h("div", { class: "ob-col" }, g, h("button", { class: "btn ob-ghost", text: "Use without an account", onclick: () => go(at + 1) })),
-          h("p", { class: "ob-fine", text: "Signing in lets you sync across devices and invite friends. Without an account, pages stay in this browser." })];
+          h("p", { class: "ob-fine", text: "Signing in lets you sync across devices and invite your team. Without an account, everything stays in this browser." })];
       }
 
       /* step: how will you use it */
@@ -70,7 +73,7 @@
           return b;
         }));
         return [h("h2", { text: "How do you want to use Lumen?" }),
-          h("p", { class: "ob-sub", text: "This helps us suggest the right pages. You can change everything later." }),
+          h("p", { class: "ob-sub", text: PAGES() ? "This helps us suggest the right pages. You can change everything later." : "You can change everything later." }),
           cards, h("label", { class: "ob-label", text: "What should we call you?" }), name,
           h("label", { class: "ob-label", text: "Pick an avatar" }), avs,
           nav("Continue", () => { if (!a.picks.length) a.picks = [...Templates.USES[a.use].defaults]; go(at + 1); })];
@@ -108,8 +111,9 @@
           a.theme = v; document.documentElement.dataset.theme = v; theme.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === e.currentTarget)); } })));
         const preview = h("div", { class: "ob-prev glass" },
           h("div", { class: "ob-prev-head" }, prevLogo, prevName),
-          h("div", { class: "ob-prev-row on" }, "👋 Getting Started"),
-          ...a.picks.map((k, i) => h("div", { class: "ob-prev-row", style: { animationDelay: 80 + i * 60 + "ms" } }, `${Templates.CATALOG[k].icon} ${Templates.CATALOG[k].label}`)));
+          ...(PAGES() ? [h("div", { class: "ob-prev-row on" }, "👋 Getting Started"),
+            ...a.picks.map((k, i) => h("div", { class: "ob-prev-row", style: { animationDelay: 80 + i * 60 + "ms" } }, `${Templates.CATALOG[k].icon} ${Templates.CATALOG[k].label}`))]
+            : APPS.map(([ic, t], i) => h("div", { class: "ob-prev-row" + (i ? "" : " on"), style: { animationDelay: 80 + i * 50 + "ms" } }, `${ic} ${t}`))));
         const build = h("button", { class: "btn primary ob-primary", text: "Set up my workspace ✨" });
         build.onclick = () => buildStep();
         return [h("h2", { text: "Make it yours" }),
@@ -126,7 +130,8 @@
       /* final: animated build */
       async function buildStep() {
         dots.style.visibility = "hidden"; card.querySelector(".ob-x").style.display = "none";
-        const items = ["Creating your workspace", "Adding Getting Started", ...a.picks.map(k => "Setting up " + Templates.CATALOG[k].label), "Applying your style"];
+        const items = PAGES() ? ["Creating your workspace", "Adding Getting Started", ...a.picks.map(k => "Setting up " + Templates.CATALOG[k].label), "Applying your style"]
+          : ["Creating your workspace", "Setting up tasks, chat and calendar", "Setting up CRM, HR and Drive", "Applying your style"];
         const list = h("div", { class: "ob-build" }, ...items.map(t => h("div", { class: "ob-bi" }, h("span", { class: "ob-spin" }), h("span", { text: t }))));
         const old = stage.firstElementChild; old?.classList.add("leave"); setTimeout(() => old?.remove(), 320);
         stage.append(h("div", { class: "ob-step" }, h("h2", { text: "Building your workspace…" }), list));
@@ -135,7 +140,7 @@
         for (const r of rows) { r.classList.add("doing"); await new Promise(z => setTimeout(z, 380)); r.classList.add("done"); }
         await work;
         stage.lastElementChild.replaceChildren(h("div", { class: "ob-done" }, h("div", { class: "ob-burst", text: a.icon }), h("h2", { text: "You're all set!" }),
-          h("p", { class: "ob-sub", text: `“${a.wsName}” is ready with ${a.picks.length + 1} pages.` })));
+          h("p", { class: "ob-sub", text: PAGES() ? `“${a.wsName}” is ready with ${a.picks.length + 1} pages.` : `“${a.wsName}” is ready. Invite your team from the workspace menu.` })));
         confetti(card);
         setTimeout(() => finish(a), 1500);
       }

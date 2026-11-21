@@ -25,6 +25,7 @@
     calendar: ["📅 Open Calendar", () => Apps.go("calendar")], crm: ["💼 Open CRM", () => Apps.go("crm")], company: ["🏢 Company & HR", () => Apps.go("company")],
     drive: ["🗂️ Open Drive", () => Apps.go("drive")], automation: ["⚡ Automation", () => Apps.go("automation")],
   };
+  if (window.FEATURES?.pages === false) ["newpage", "templates", "trash"].forEach(k => delete ACTIONS[k]); // pages are switched off
 
   /* ---------- setup check: looks at the real state and explains it ---------- */
   function diagnose() {

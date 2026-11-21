@@ -27,30 +27,40 @@
       a: "Open <b>Settings → Your profile → Change avatar</b> to pick from 14 avatars, your Google photo, or your initial. It shows on chat, tasks, comments and the team directory. Job title and department live in <b>Company & HR → Edit my profile</b>.", act: ["avatar", "settings"] },
 
     // ---------- pages & editor ----------
-    { id: "new-page", t: "Create a page", k: ["page", "new", "create", "document", "doc", "note"],
+    { id: "new-page", pages: true, t: "Create a page", k: ["page", "new", "create", "document", "doc", "note"],
       a: "Click <b>+ New page</b> in the sidebar (or press <b>Ctrl Alt N</b>). Hover a page in the sidebar and press <b>+</b> to put a page inside it. A new page offers templates like To-do list, Meeting notes and Project board.", act: ["newpage", "templates"] },
-    { id: "slash", t: "Add blocks with /", k: ["block", "slash", "insert", "heading", "list", "todo", "toggle", "quote", "callout", "code", "divider"],
+    { id: "slash", pages: true, t: "Add blocks with /", k: ["block", "slash", "insert", "heading", "list", "todo", "toggle", "quote", "callout", "code", "divider"],
       a: "Type <b>/</b> in any line to insert a block: headings, to-dos, toggles, callouts, code, images, tables, boards and more. Markdown works too: <code>#</code> heading, <code>-</code> bullet, <code>1.</code> numbered, <code>[]</code> to-do, <code>&gt;</code> toggle, <code>```</code> code, <code>**bold**</code>.", act: [] },
-    { id: "format", t: "Bold, colours and links", k: ["bold", "italic", "color", "colour", "highlight", "link", "format", "text"],
+    { id: "format", pages: true, t: "Bold, colours and links", k: ["bold", "italic", "color", "colour", "highlight", "link", "format", "text"],
       a: "Select text to open the formatting bar: <b>bold</b>, <i>italic</i>, underline, strike, inline code, link, text colour and highlight. Block colours are in the ⋮⋮ block menu → Color.", act: [] },
-    { id: "drag", t: "Move or reorder things", k: ["drag", "reorder", "move", "drop", "order", "arrange", "block", "mobile", "hold", "long", "card"],
+    { id: "drag", pages: true, t: "Move or reorder things", k: ["drag", "reorder", "move", "drop", "order", "arrange", "block", "mobile", "hold", "long", "card"],
       a: "<b>Computer:</b> drag the ⋮⋮ handle beside a block, a board card, or a page in the sidebar (drop onto another page to nest it).<br><b>Phone:</b> press and hold a card or page until it lifts, then drag. For blocks, tap the block then drag its ⋮⋮ handle.<br>Blocks can also move with <b>Ctrl Shift ↑/↓</b>.", act: [] },
-    { id: "delete-page", t: "Delete or restore a page", k: ["delete", "trash", "restore", "undo", "recover", "deleted", "lost", "page"],
+    { id: "delete-page", pages: true, t: "Delete or restore a page", k: ["delete", "trash", "restore", "undo", "recover", "deleted", "lost", "page"],
       a: "Pages go to <b>Trash</b> first (bottom of the sidebar), where you can restore them or delete them forever. Deleted blocks show an <b>Undo</b> button for a few seconds.", act: ["trash"] },
-    { id: "favorite", t: "Favorites", k: ["favorite", "favourite", "star", "pin", "bookmark"],
+    { id: "favorite", pages: true, t: "Favorites", k: ["favorite", "favourite", "star", "pin", "bookmark"],
       a: "Click the ⭐ in the top bar of a page (or the page's ··· menu in the sidebar) to add it to Favorites at the top of the sidebar.", act: [] },
-    { id: "cover", t: "Cover, icon and page style", k: ["cover", "icon", "emoji", "font", "width", "lock", "style"],
+    { id: "cover", pages: true, t: "Cover, icon and page style", k: ["cover", "icon", "emoji", "font", "width", "lock", "style"],
       a: "Hover the top of a page for <b>Add icon</b> / <b>Add cover</b>. The ··· menu (top right) has fonts, small text, full width, lock page, duplicate, export to Markdown and print.", act: [] },
-    { id: "database", t: "Tables, boards and galleries", k: ["database", "table", "board", "gallery", "property", "column", "kanban", "row"],
+    { id: "database", pages: true, t: "Tables, boards and galleries", k: ["database", "table", "board", "gallery", "property", "column", "kanban", "row"],
       a: "Type <b>/table</b>, <b>/board</b> or <b>/gallery</b>. Click a column header to rename it or change its type (select, date, number, checkbox, progress…), <b>+</b> adds a property, and <b>Open</b> on a row shows its details panel.", act: [] },
-    { id: "images", t: "Images and files", k: ["image", "picture", "upload", "file", "size", "big", "photo", "pdf"],
+    { id: "images", pages: true, t: "Images and files", k: ["image", "picture", "upload", "file", "size", "big", "photo", "pdf"],
       a: "Use <b>/image</b> to upload or paste a link. In shared workspaces, uploads (and Drive files) are limited to about <b>700 KB</b> each on the free plan, so use a link for bigger files.", act: ["drive"] },
-    { id: "search", t: "Search everything", k: ["search", "find", "look", "where"],
+    { id: "search", pages: true, t: "Search everything", k: ["search", "find", "look", "where"],
       a: "Press <b>Ctrl K</b> (or click Search in the sidebar) to search page titles and content and run commands like “Toggle dark mode”.", act: ["search"] },
-    { id: "export", t: "Export, backup and import", k: ["export", "backup", "import", "download", "markdown", "save", "pdf"],
+    { id: "export", pages: true, t: "Export, backup and import", k: ["export", "backup", "import", "download", "markdown", "save", "pdf"],
       a: "• One page: ··· → <b>Export as Markdown</b> or <b>Print / PDF</b>.<br>• Private workspace: <b>Settings → Backup → Export</b> (and Import on another device).<br>• Shared workspaces are saved online automatically.", act: ["settings"] },
-    { id: "shortcuts", t: "Keyboard shortcuts", k: ["shortcut", "keyboard", "keys", "hotkey"],
+    { id: "shortcuts", pages: true, t: "Keyboard shortcuts", k: ["shortcut", "keyboard", "keys", "hotkey"],
       a: "<b>Ctrl K</b> search · <b>Ctrl Alt N</b> new page · <b>Ctrl \\</b> sidebar · <b>Ctrl Shift L</b> theme · <b>/</b> blocks · <b>Tab</b> indent · <b>Ctrl D</b> duplicate block · <b>Ctrl Shift ↑↓</b> move block · <b>Ctrl /</b> open Lumi.", act: [] },
+
+    // used while pages are switched off (Bitrix24-style workspace)
+    { id: "search-apps", pages: false, t: "Search everything", k: ["search", "find", "look", "where"],
+      a: "Press <b>Ctrl K</b> (or click <b>Search</b> in the sidebar) to find tasks, people, deals, leads, contacts, files and apps, and to run commands like “Toggle dark mode”.", act: ["search"] },
+    { id: "shortcuts-apps", pages: false, t: "Keyboard shortcuts", k: ["shortcut", "keyboard", "keys", "hotkey"],
+      a: "<b>Ctrl K</b> search · <b>Ctrl \</b> sidebar · <b>Ctrl Shift L</b> dark mode · <b>Ctrl /</b> open Lumi · in chat, <b>Enter</b> sends and <b>Shift Enter</b> adds a new line.", act: [] },
+    { id: "drag-apps", pages: false, t: "Move or reorder things", k: ["drag", "reorder", "move", "drop", "order", "arrange", "mobile", "hold", "long", "card", "board", "kanban"],
+      a: "<b>Computer:</b> drag a task card between columns on the Kanban board (and deals between stages in CRM).<br><b>Phone:</b> press and hold a card until it lifts, then drag it.", act: ["tasks"] },
+    { id: "pages-off", pages: false, t: "Where did pages go?", k: ["page", "pages", "note", "notes", "document", "doc", "wiki", "template", "templates", "trash", "editor"],
+      a: "Lumen is set up as a team workspace right now: <b>Tasks, Chat, Feed, Calendar, CRM, Company & HR, Drive and Automation</b>. Notion-style pages are switched off, but nothing was deleted. Ask the site owner if you need them back. For notes, try a task description, a Feed post or a file in <b>Drive</b>.", act: ["tasks", "drive"] },
 
     // ---------- apps ----------
     { id: "tasks", app: "tasks", t: "Tasks and projects", k: ["task", "assign", "deadline", "todo", "project", "checklist", "due"],
@@ -93,7 +103,7 @@
       a: "Lumen moved to <b>lumenspaceapp.github.io</b>. The old address forwards here. If you had private pages there, open the old address once and press <b>Move my pages & continue</b>.", act: [] },
     { id: "delete-ws", t: "Delete a shared workspace", k: ["delete", "workspace", "remove", "close", "shared"],
       a: "Owner only: open <b>Share → Delete shared workspace</b>. It permanently deletes all its pages and data for every member.", act: ["invite"] },
-    { id: "reset", t: "Start over / reset", k: ["reset", "start", "over", "clear", "wipe", "demo"],
+    { id: "reset", pages: true, t: "Start over / reset", k: ["reset", "start", "over", "clear", "wipe", "demo"],
       a: "<b>Settings → Reset</b> replaces your <i>private</i> workspace with the demo pages (export a backup first). Shared workspaces aren't affected.", act: ["settings"] },
   ];
 
@@ -131,5 +141,8 @@
       return { e, s };
     }).filter(x => x.s >= 1.5).sort((a, b) => b.s - a.s);
   }
+  // topics marked pages:true only apply when pages are on, pages:false only when they're off
+  const on = window.FEATURES?.pages !== false;
+  for (let i = KB.length - 1; i >= 0; i--) if (KB[i].pages === !on) KB.splice(i, 1);
   window.HelpKB = { KB, search, byId: id => KB.find(e => e.id === id) };
 })();

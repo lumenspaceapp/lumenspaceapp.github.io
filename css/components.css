@@ -328,3 +328,8 @@ body.no-motion .nt-card, body.no-motion .nt-ask { animation: none; }
   .nt-stack { top: calc(8px + env(safe-area-inset-top)); right: 12px; left: 12px; width: auto; }
   .nt-ask { right: 12px; left: 12px; width: auto; bottom: calc(84px + env(safe-area-inset-bottom)); }
 }
+
+/* Notion-style pages switched off (js/features.js): hide everything page-related */
+html.no-pages [data-action="new"], html.no-pages [data-action="templates"], html.no-pages [data-action="trash"],
+html.no-pages #favSection, html.no-pages #pageSection,
+html.no-pages #favBtn, html.no-pages #outlineBtn, html.no-pages #pageMenuBtn, html.no-pages #shareBtn, html.no-pages #outline { display: none !important; }

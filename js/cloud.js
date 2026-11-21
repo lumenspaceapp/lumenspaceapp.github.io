@@ -376,7 +376,7 @@ Cloud.share = async anchor => {
       h("button", { class: "icon-btn xs", title: "Remove", html: icon("x"), onclick: async () => { await removeMember(m); UI.closePops(); } })) : null) }));
   items.push({ sep: true },
     { label: "Copy invite link", icon: "link", onClick: () => { navigator.clipboard?.writeText(`${base}#/ws/${ws.id}`); UI.toast("🔗 Invite link copied. Friends sign in with the email you invited."); } },
-    { label: "Copy link to this page", icon: "page", onClick: () => App.copyLink(App.currentId) });
+    ...(window.FEATURES?.pages !== false ? [{ label: "Copy link to this page", icon: "page", onClick: () => App.copyLink(App.currentId) }] : []));
   if (isOwner) items.push({ label: "Delete shared workspace", icon: "trash", danger: true, onClick: deleteWorkspace });
   else items.push({ el: h("div", { class: "menu-empty", style: { fontSize: "12px", maxWidth: "260px" }, text: "Only the owner can invite or remove people." }) });
   UI.menu(anchor, items, { align: "end" });

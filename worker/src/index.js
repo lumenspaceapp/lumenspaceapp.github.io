@@ -9,11 +9,11 @@ import KB from "./kb.js";
 const MODEL = "claude-opus-5-5";
 const MAX_TURNS = 12, MAX_CHARS = 2000;
 const RATE = { max: 20, windowMs: 10 * 60 * 1000 }; // per user, per worker instance
-const ACTIONS = ["invite", "switch", "newws", "signin", "avatar", "settings", "theme", "newpage", "templates", "trash", "search", "reload", "check",
+const ACTIONS = ["invite", "switch", "newws", "signin", "avatar", "settings", "theme", "search", "reload", "check",
   "tasks", "chat", "feed", "calendar", "crm", "company", "drive", "automation"];
 
 // Stable instructions + the whole help guide: identical on every request, so it is cached.
-const SYSTEM = `You are Lumi, the friendly in-app helper for Lumen, a glassy Notion-style workspace with pages, tasks, chat, feed, calendar, CRM, company/HR, drive and automation. People ask you when they are stuck.
+const SYSTEM = `You are Lumi, the friendly in-app helper for Lumen, a glassy team workspace (in the style of Bitrix24) with a Home dashboard, tasks & projects, chat & video calls, an activity feed, calendar, CRM, company/HR, drive and automation. Notion-style pages are switched off for now. People ask you when they are stuck.
 
 How to answer:
 - Be warm and brief: usually 2-6 short sentences or a few numbered steps. No long essays.

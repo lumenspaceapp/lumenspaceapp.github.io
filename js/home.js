@@ -32,7 +32,7 @@
             h("p", { class: "hm-sum", text: "You have " + bits.join(" · ") + "." }))),
         h("div", { class: "hm-qas" },
           act("✅", "New task", () => Apps.Tasks.newTask()), act("📅", "Event", () => Apps.Calendar.editEvent()),
-          act("📣", "Post", () => Apps.go("feed")), act("📹", "Video call", startCall), act("📄", "Page", () => App.newPage())));
+          act("📣", "Post", () => Apps.go("feed")), act("📹", "Video call", startCall), window.FEATURES?.pages !== false ? act("📄", "Page", () => App.newPage()) : act("👋", "Invite", e => window.Cloud ? Cloud.share(e.currentTarget) : UI.toast("Sharing is still loading"))));
     }
     function startCall() {
       const url = `https://meet.jit.si/Lumen-${(window.Cloud?.ws?.id || "local").slice(0, 10)}-general`;
@@ -190,7 +190,7 @@
           h("button", { class: "hm-page hm-new", onclick: () => App.newPage() }, h("span", { class: "hm-page-ic", text: "＋" }), h("b", { text: "New page" }), h("small", { text: "or press Ctrl Alt N" })))));
     }
 
-    root.append(hero, h("div", { class: "hm-grid" }, cards.tasks, cards.clock, cards.agenda, cards.chat, cards.team, cards.updates, cards.crm, cards.pages));
+    root.append(hero, h("div", { class: "hm-grid" }, cards.tasks, cards.clock, cards.agenda, cards.chat, cards.team, cards.updates, cards.crm, ...(window.FEATURES?.pages !== false ? [cards.pages] : [])));
     const all = () => { drawHero(); drawTasks(); drawClock(); drawAgenda(); drawChat(); drawTeam(); drawUpdates(); drawCrm(); drawPages(); };
     all();
     const typing = el => el.contains(document.activeElement) && /INPUT|TEXTAREA/.test(document.activeElement.tagName);

@@ -139,7 +139,8 @@
     const m = location.hash.match(/^#\/p\/(.+)$/);
     let id = m ? decodeURIComponent(m[1]) : "home";
     const p = Store.page(id);
-    if (id !== "home" && (!p || p.deleted)) { if (p?.deleted) UI.toast("That page is in the trash"); id = "home"; history.replaceState(null, "", "#/p/home"); }
+    if (id !== "home" && !window.FEATURES.pages) { id = "home"; history.replaceState(null, "", "#/p/home"); } // pages are switched off
+    else if (id !== "home" && (!p || p.deleted)) { if (p?.deleted) UI.toast("That page is in the trash"); id = "home"; history.replaceState(null, "", "#/p/home"); }
     App.currentId = id;
     document.getElementById("scroller").scrollTop = 0;
     if (id === "home") { window.Apps?.reg.home ? Apps.render("home") : Page.renderHome(); document.title = "Home · Lumen"; document.body.classList.remove("show-outline"); }
@@ -201,14 +202,15 @@
       h("div", { class: "menu-sec", style: { marginTop: "14px" }, text: "Notifications" }),
       ...(window.Notify ? Notify.settingsRows(row) : []),
       h("div", { class: "menu-sec", style: { marginTop: "14px" }, text: "Workspace" }),
-      row("Backup", "Download or restore your whole workspace", h("div", { style: { display: "flex", gap: "6px" } },
+      !window.FEATURES.pages ? null : row("Backup", "Download or restore your whole workspace", h("div", { style: { display: "flex", gap: "6px" } },
         h("button", { class: "btn", text: "Export", onclick: () => { const a = h("a", { href: URL.createObjectURL(new Blob([Store.exportAll()], { type: "application/json" })), download: "lumen-workspace.json" }); document.body.append(a); a.click(); a.remove(); } }),
         h("button", { class: "btn", text: "Import", onclick: () => file.click() }), file)),
-      row("Reset", "Replace everything with the demo workspace", h("button", { class: "btn danger", text: "Reset…", onclick: async () => { if (await UI.confirm("This erases all pages in this browser and restores the demo workspace. This can't be undone.", "Reset")) { Store.reset(); boot(); UI.toast("Workspace reset"); } } })),
+      !window.FEATURES.pages ? null : row("Reset", "Replace everything with the demo workspace", h("button", { class: "btn danger", text: "Reset…", onclick: async () => { if (await UI.confirm("This erases all pages in this browser and restores the demo workspace. This can't be undone.", "Reset")) { Store.reset(); boot(); UI.toast("Workspace reset"); } } })),
       h("div", { class: "menu-sec", style: { marginTop: "14px" }, text: "Keyboard shortcuts" }),
       h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 20px", fontSize: "13px", color: "var(--muted)" } },
-        ...[["Search / commands", "Ctrl K"], ["New page", "Ctrl Alt N"], ["Toggle sidebar", "Ctrl \\"], ["Toggle theme", "Ctrl Shift L"], ["Slash menu", "/"], ["Move block", "Ctrl Shift ↑↓"],
+        ...(window.FEATURES.pages ? [["Search / commands", "Ctrl K"], ["New page", "Ctrl Alt N"], ["Toggle sidebar", "Ctrl \\"], ["Toggle theme", "Ctrl Shift L"], ["Slash menu", "/"], ["Move block", "Ctrl Shift ↑↓"],
           ["Indent / outdent", "Tab / Shift Tab"], ["Duplicate block", "Ctrl D"], ["Inline code", "Ctrl E"], ["Turn into heading", "Ctrl Alt 1-3"], ["Select block", "Esc"], ["Delete selected block", "Backspace"]]
+          : [["Search", "Ctrl K"], ["Toggle sidebar", "Ctrl \\"], ["Toggle theme", "Ctrl Shift L"], ["Ask Lumi", "Ctrl /"], ["Send a chat message", "Enter"], ["New line in chat", "Shift Enter"]])
           .map(([a, k]) => h("div", { style: { display: "flex", justifyContent: "space-between" } }, h("span", { text: a }), h("kbd", { text: k })))));
     const m = UI.modal("Settings", body, { backdropClass: "clear" }); // keep the page visible so glass changes show live
   }
@@ -223,7 +225,7 @@
     }
     if (mod && k === "p" && !e.shiftKey) { e.preventDefault(); return Palette.show(); }
     if (mod && e.key === "\\") { e.preventDefault(); document.body.classList.remove("focus"); return App.toggleSidebar(); }
-    if (mod && e.altKey && k === "n") { e.preventDefault(); return App.newPage(); }
+    if (mod && e.altKey && k === "n" && window.FEATURES.pages) { e.preventDefault(); return App.newPage(); }
     if (mod && e.shiftKey && k === "l") { e.preventDefault(); return App.toggleTheme(); }
   }
 
@@ -252,7 +254,8 @@
     };
     document.getElementById("wsSwitch").onclick = e => UI.menu(e.currentTarget, [
       ...(window.Cloud ? Cloud.workspaceMenuItems() : []), { sep: true },
-      { label: "Settings", icon: "dots", onClick: settings }, { label: "Templates", icon: "gallery", onClick: Page.templatesModal }, { label: "Trash", icon: "trash", onClick: Page.trashModal }]);
+      { label: "Settings", icon: "dots", onClick: settings },
+      ...(window.FEATURES.pages ? [{ label: "Templates", icon: "gallery", onClick: Page.templatesModal }, { label: "Trash", icon: "trash", onClick: Page.trashModal }] : [])]);
     const scroller = document.getElementById("scroller");
     scroller.addEventListener("scroll", () => document.getElementById("main").classList.toggle("scrolled", scroller.scrollTop > 4), { passive: true });
     document.getElementById("view").addEventListener("input", e => { if (e.target.closest(".blocks")) document.querySelector(".tpl-pick")?.remove(); });
