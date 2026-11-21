@@ -28,7 +28,7 @@
     del(k) { try { localStorage.removeItem("lumen-mk-" + k); } catch {} },
   };
   const monthStart = () => { const d = new Date(); d.setDate(1); d.setHours(0, 0, 0, 0); return d.getTime(); };
-  const when = ts => ts ? new Date(ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
+  const when = ts => ts ? (Apps.fmtDateTime?.(ts) ?? new Date(ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })) : ""; // Settings → Region
   const dayOf = ts => ts ? new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric", year: new Date(ts).getFullYear() === new Date().getFullYear() ? undefined : "numeric" }) : "";
   const toLocalInput = ts => { const d = new Date(ts); return Apps.iso(d) + "T" + pad(d.getHours()) + ":" + pad(d.getMinutes()); };
   const tomorrow10 = () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(10, 0, 0, 0); return d.getTime(); };

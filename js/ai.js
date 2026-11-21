@@ -1,7 +1,8 @@
 /* AI helpers (CoPilot-style), powered by the Lumi AI worker (worker/src/index.js → POST /assist).
 
    Apps.AI = {
-     available() → true when window.LUMI_AI_URL is set and someone is signed in (Cloud.user).
+     available(place?) → true when window.LUMI_AI_URL is set and someone is signed in (Cloud.user), and the place
+                   ("tasks" | "feed" | "crm" | "chat" | "meetings" | "kb") isn't switched off in Settings → AI (Prefs "ai.<place>").
                    Apps show AI actions only when this is true: `if (Apps.AI?.available()) …`.
      TASKS       → the jobs the worker accepts (the prompt for each is built on the server, never here):
                    "task_description"  input: task title              context: current description
@@ -17,8 +18,8 @@
                    Streams the answer: onToken(chunk, textSoFar) for every piece; resolves with the whole text.
                    Rejects on errors with a friendly toast already shown (err.shown; `quiet: true` skips the toast),
                    when the privacy note is cancelled (err.cancelled) or when `signal` aborts (err.name === "AbortError").
-     button(label, run) → small "✨ label" glass button; hidden when !available(); shows a spinner while run(btn) runs.
-     compose({ title, task, input, context, tone, onInsert, insertLabel, pick, emptyHint }) → Promise (first answer done)
+     button(label, run, { place }) → small "✨ label" glass button; hidden when !available(); shows a spinner while run(btn) runs.
+     compose({ place, title, task, input, context, tone, onInsert, insertLabel, pick, emptyHint }) → Promise (first answer done)
                    AI panel: streams the answer, tone picker for "rewrite", Regenerate, Copy, Insert (calls onInsert(text);
                    the answer can be edited first) and Cancel. With pick(line), every answer line becomes a button instead.
      lines(text) → the answer split into clean lines (bullets, numbers, checkboxes removed), e.g. for checklists.
@@ -32,7 +33,9 @@
   const CONSENT_KEY = "lumen-ai-consent";
   const NOTE = "AI requests send the text you choose to Anthropic's Claude through Lumen's server. Don't include passwords or sensitive personal data.";
 
-  const available = () => !!window.LUMI_AI_URL && !!window.Cloud?.user;
+  // place: "tasks" | "feed" | "crm" | "chat" | "meetings" | "kb" — false when switched off in Settings → AI
+  const placeOn = place => !place || !window.Prefs || Prefs.get("ai." + place) !== false;
+  const available = place => !!window.LUMI_AI_URL && !!window.Cloud?.user && placeOn(place);
   const base = () => String(window.LUMI_AI_URL || "").replace(/\/+$/, "");
   const clip = (v, tail) => { const s = String(v ?? "").trim(); return s.length <= MAX ? s : tail ? s.slice(-MAX) : s.slice(0, MAX); };
 
@@ -114,7 +117,7 @@
 
   /* ---------- "✨ label" button ---------- */
   function button(label, run, opts = {}) {
-    const b = h("button", { type: "button", class: "ai-btn" + (opts.className ? " " + opts.className : ""), title: opts.title || label, hidden: !available() },
+    const b = h("button", { type: "button", class: "ai-btn" + (opts.className ? " " + opts.className : ""), title: opts.title || label, hidden: !available(opts.place) },
       h("span", { class: "ai-ic", text: "✨" }), h("span", { class: "ai-l", text: label }));
     b.addEventListener("click", async e => {
       e.preventDefault();
@@ -136,6 +139,7 @@
   async function compose(o = {}) {
     const input = String(o.input ?? "").trim();
     if (!input) return UI.toast(o.emptyHint || "Write a few words first, then try again.");
+    if (!placeOn(o.place)) return UI.toast("AI is switched off here in Settings → AI.");
     if (!available()) return UI.toast(window.LUMI_AI_URL ? "Sign in to use AI." : "AI isn't set up on this site yet.");
     if (!(await consent())) return;
     const rewrite = o.task === "rewrite";

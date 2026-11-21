@@ -24,6 +24,19 @@
     }).replace(/\n/g, "<br>");
   }
 
+  /* ---------- workspace settings (js/prefs.js) ---------- */
+  const pref = (path, d) => { const v = window.Prefs ? Prefs.get(path) : undefined; return v === undefined || v === null || v === "" ? d : v; };
+  const toolOn = f => !window.Prefs || Prefs.tool("feed", f);
+  const kindOn = k => k === "poll" ? toolOn("polls") : k === "thanks" ? toolOn("appreciation") : true;
+  // Settings → Communications: who may post to "All employees" ("all" | "managers" | "admins") and the default audience
+  const broadcastRule = () => pref("comms.feedBroadcast", "all");
+  const canAll = () => { const r = broadcastRule(); return r === "admins" ? (Apps.isAdmin?.() ?? true) : r === "managers" ? (Apps.isManager?.() ?? true) : true; };
+  const allNote = () => broadcastRule() === "admins" ? "Only admins can post to all employees. Choose people or departments." : "Only managers and admins can post to all employees. Choose people or departments.";
+  const defaultAll = () => canAll() && pref("comms.feedDefaultAll", true) !== false;
+  const likeText = () => String(pref("comms.likeText", "Like")).slice(0, 24);
+  const fmtHM = hm => { try { const r = Apps.fmtTime?.(hm); if (r && !/invalid|nan/i.test(r)) return r; } catch {} return hm; };
+  const fullWhen = t => { try { const r = Apps.fmtDateTime?.(t); if (r && !/invalid|nan/i.test(r)) return r; } catch {} return new Date(t).toLocaleString(); };
+
   /* ---------- audience ---------- */
   const isAll = a => !a || a.all || (!toList(a.people).length && !toList(a.depts).length);
   const inAudience = (a, person) => isAll(a) || toList(a.people).includes(person.key) || (!!person.dept && toList(a.depts).includes(person.dept));
@@ -44,12 +57,13 @@
 
   function audiencePicker(anchor, aud, onChange) {
     const inp = h("input", { class: "menu-input", placeholder: "Search people or departments…" }), list = h("div", { class: "fd-aud-list" });
-    const toggle = (set, v) => { aud.all = false; set.has(v) ? set.delete(v) : set.add(v); if (!aud.people.size && !aud.depts.size) aud.all = true; };
+    const toggle = (set, v) => { aud.all = false; set.has(v) ? set.delete(v) : set.add(v); if (!aud.people.size && !aud.depts.size && defaultAll()) aud.all = true; };
     const row = (on, lead, label, sub, click) => h("button", { class: "mi compact" + (on ? " on" : ""), onclick: () => { click(); onChange(); draw(); } },
       h("span", { class: "fd-check", text: on ? "✓" : "" }), lead, h("span", { class: "mi-t", text: label }), sub ? h("span", { class: "mi-k", text: sub }) : null);
     const draw = () => {
       const q = inp.value.trim().toLowerCase(), ppl = Data.people(), out = [];
-      if (!q || "all employees everyone".includes(q)) out.push(row(aud.all, h("span", { class: "fd-aud-ic", text: "👥" }), "All employees", ppl.length + (ppl.length === 1 ? " person" : " people"), () => { aud.all = true; aud.people.clear(); aud.depts.clear(); }));
+      if (!canAll()) out.push(h("div", { class: "menu-empty fd-aud-note", text: "🔒 " + allNote() }));
+      else if (!q || "all employees everyone".includes(q)) out.push(row(aud.all, h("span", { class: "fd-aud-ic", text: "👥" }), "All employees", ppl.length + (ppl.length === 1 ? " person" : " people"), () => { aud.all = true; aud.people.clear(); aud.depts.clear(); }));
       const ds = depts().filter(d => d.toLowerCase().includes(q));
       if (ds.length) out.push(h("div", { class: "menu-sec", text: "Departments" }), ...ds.map(d => row(!aud.all && aud.depts.has(d), h("span", { class: "fd-aud-ic", text: "🏢" }), d, String(ppl.filter(p => p.dept === d).length), () => toggle(aud.depts, d))));
       const ps = ppl.filter(p => (p.name + " " + p.email + " " + (p.dept || "")).toLowerCase().includes(q));
@@ -109,13 +123,13 @@
 
   /* ---------- events ---------- */
   const longDate = d => d ? new Date(d + "T00:00").toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }) : "";
-  const timeText = ev => ev.allDay || !ev.start ? "All day" : ev.start + (ev.finish ? " – " + ev.finish : "");
+  const timeText = ev => ev.allDay || !ev.start ? "All day" : fmtHM(ev.start) + (ev.finish ? " – " + fmtHM(ev.finish) : "");
   const whenText = ev => longDate(ev.date) + (ev.end && ev.end > ev.date ? " – " + longDate(ev.end) : "") + " · " + timeText(ev) + (ev.where ? " · " + ev.where : "");
 
   function render(root, arg) {
     let kind = "post", tab = "all", busy = false, focusId = arg || null;
     const flt = { q: "", author: null, range: "all", type: "any" };
-    const aud = { all: true, people: new Set(), depts: new Set() };
+    const aud = { all: defaultAll(), people: new Set(), depts: new Set() };
     let pending = [], thanksTo = [], badge = "thanks";
     const expanded = new Set(), cfiles = new Map(); // post id -> pending comment files
 
@@ -167,17 +181,20 @@
     // audience ("To:")
     const toRow = h("div", { class: "fd-torow" });
     const tag = (label, onRemove, lead) => h("span", { class: "fd-tag" }, lead || null, h("span", { text: label }), h("button", { type: "button", class: "fd-tag-x", title: "Remove", text: "×", onclick: onRemove }));
-    const settle = () => { if (!aud.people.size && !aud.depts.size) aud.all = true; paintTo(); };
+    const settle = () => { if (!aud.people.size && !aud.depts.size && defaultAll()) aud.all = true; paintTo(); };
     function paintTo() {
+      if (aud.all && !canAll()) aud.all = false;
       const chips = aud.all ? [h("span", { class: "fd-tag all", text: "👥 All employees" })]
+        : !aud.people.size && !aud.depts.size ? [h("span", { class: "fd-tag fd-tag-empty", title: canAll() ? "" : allNote(), text: canAll() ? "Choose people or departments" : "🔒 Choose people or departments" })]
         : [...[...aud.depts].map(d => tag("🏢 " + d, () => { aud.depts.delete(d); settle(); })), ...[...aud.people].map(k => tag(Data.person(k).name, () => { aud.people.delete(k); settle(); }, Apps.avatar(Data.person(k), 18)))];
-      toRow.replaceChildren(h("span", { class: "fd-to-l", text: "To:" }), ...chips, h("button", { type: "button", class: "fd-tag add", text: aud.all ? "Change" : "+ Add", onclick: e => audiencePicker(e.currentTarget, aud, paintTo) }));
+      toRow.replaceChildren(h("span", { class: "fd-to-l", text: "To:" }), ...chips, h("button", { type: "button", class: "fd-tag add", text: aud.all ? "Change" : "+ Add", onclick: e => audiencePicker(e.currentTarget, aud, paintTo) }),
+        !canAll() ? h("span", { class: "fd-aud-why", text: allNote() }) : null);
     }
     paintTo();
 
     const pubBtn = h("button", { class: "btn primary", text: "Publish", onclick: publish });
     // AI helpers (js/ai.js): only when AI is available
-    const ai = Apps.AI?.available(), aiPut = v => { text.value = v; grow(); text.focus(); };
+    const ai = Apps.AI?.available("feed"), aiPut = v => { text.value = v; grow(); text.focus(); };
     const aiBtns = ai ? [
       Apps.AI.button("Draft", () => Apps.AI.compose({ title: "Draft a post", task: "post_draft", input: text.value, emptyHint: "Type a few words about your post, then tap Draft.", insertLabel: "Use this", onInsert: aiPut }), { title: "Write a post from a few words" }),
       Apps.AI.button("Improve", () => Apps.AI.compose({ title: "Improve your post", task: "rewrite", input: text.value, emptyHint: "Write your post first, then tap Improve.", insertLabel: "Replace", onInsert: aiPut }), { title: "Rewrite in another tone" }),
@@ -217,7 +234,7 @@
       if (allDay) allDayBtn.click();
       opts.forEach(o => (o.value = "")); thanksTo = []; paintThanks();
       revoke(pending); pending = [];
-      aud.all = true; aud.people.clear(); aud.depts.clear(); paintTo();
+      aud.all = defaultAll(); aud.people.clear(); aud.depts.clear(); paintTo();
       kind = "post"; kinds.querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.k === "post")); text.placeholder = HINT.post; composer.dataset.kind = "post";
       paintFiles(); grow(); collapse();
     }
@@ -225,6 +242,9 @@
     async function publish() {
       if (busy) return;
       const t = text.value.trim(), me = Data.me();
+      if (aud.all && !canAll()) { aud.all = false; paintTo(); }
+      if (!aud.all && !aud.people.size && !aud.depts.size) { expand(); return UI.toast(canAll() ? "Choose who should see this post" : allNote()); }
+      if (!kindOn(kind)) return UI.toast("This post type is switched off in Settings → Tools");
       const audience = aud.all ? { all: true } : { people: [...aud.people], depts: [...aud.depts] };
       const options = opts.map(o => o.value.trim()).filter(Boolean);
       if (kind === "poll" && (!t || options.length < 2)) return UI.toast("A poll needs a question and at least 2 options");
@@ -269,13 +289,22 @@
 
     /* ---------- tabs + filter bar ---------- */
     const tabsEl = Apps.tabs([["all", "All"], ["announce", "Announcements"], ["poll", "Polls"], ["thanks", "Appreciation"], ["unread", "Unread important"], ["mine", "My posts"]], tab, k => { tab = k; draw(); });
+    // Settings → Tools → Feed: polls and appreciation can be switched off (composer types, tabs, type filter)
+    function paintTools() {
+      kinds.querySelectorAll("button").forEach(b => { b.hidden = !kindOn(b.dataset.k); });
+      [...tabsEl.children][2].hidden = !kindOn("poll"); [...tabsEl.children][3].hidden = !kindOn("thanks");
+      if (!kindOn(kind)) setKind("post");
+      if ((tab === "poll" || tab === "thanks") && !kindOn(tab)) { tab = "all"; [...tabsEl.children].forEach((b, i) => b.classList.toggle("on", i === 0)); }
+      if (!kindOn(flt.type)) flt.type = "any";
+      paintTo();
+    }
     const unreadTab = [...tabsEl.children][4];
     const search = h("input", { class: "menu-input fd-search", type: "search", placeholder: "Search posts, people, files…" });
     let sT; search.addEventListener("input", () => { clearTimeout(sT); sT = setTimeout(() => { flt.q = search.value; paintFilters(); draw(); }, 150); });
     const authorBtn = h("button", { type: "button", class: "chip-btn", onclick: e => { if (e.target.closest(".fd-x")) { flt.author = null; paintFilters(); return draw(); } Apps.personPicker(authorBtn, p => { flt.author = p?.key || null; paintFilters(); draw(); }, { allowNone: true }); } });
     const pickMenu = (btn, items, key) => UI.menu(btn, items.map(([k, l]) => ({ label: l, iconHtml: flt[key] === k ? "✓" : "", onClick: () => { flt[key] = k; paintFilters(); draw(); } })));
     const rangeBtn = h("button", { type: "button", class: "chip-btn", onclick: () => pickMenu(rangeBtn, RANGES, "range") });
-    const typeBtn = h("button", { type: "button", class: "chip-btn", onclick: () => pickMenu(typeBtn, TYPES, "type") });
+    const typeBtn = h("button", { type: "button", class: "chip-btn", onclick: () => pickMenu(typeBtn, TYPES.filter(([k]) => kindOn(k)), "type") });
     const clearBtn = h("button", { type: "button", class: "fd-clear", text: "Clear filters", onclick: () => { resetFilters(); draw(); } });
     // group posts stay in their workgroup; members can choose to see them here too
     let showGroups = false; try { showGroups = localStorage.getItem("lumen-feed-groups") === "1"; } catch {}
@@ -481,7 +510,7 @@
           h("div", { class: "fd-bubble" }, h("div", { class: "cmt-h" }, h("b", { text: who.name }), h("small", { class: "fd-time", dataset: { at: c.at }, text: UI.timeAgo(c.at) })),
             c.text ? h("div", { class: "cmt-t", html: rich(c.text) }) : null, filesBlock(c.files)),
           h("div", { class: "fd-cacts" },
-            h("button", { type: "button", class: cl ? "on" : "", title: mineLikes.map(x => Data.person(x.split("|")[1]).name).join(", "), text: (cl ? "❤️ Liked" : "Like") + (mineLikes.length ? " · " + mineLikes.length : ""), onclick: () => Data.arr("feed", p.id, "commentLikes", id + "|" + me, !cl) }),
+            h("button", { type: "button", class: cl ? "on" : "", title: mineLikes.map(x => Data.person(x.split("|")[1]).name).join(", "), text: (cl ? "❤️ " + likeText() : likeText()) + (mineLikes.length ? " · " + mineLikes.length : ""), onclick: () => Data.arr("feed", p.id, "commentLikes", id + "|" + me, !cl) }),
             h("button", { type: "button", text: "Reply", onclick: () => reply(who) }),
             c.by === me ? h("button", { type: "button", text: "Delete", onclick: async () => { if (await UI.confirm("Delete this comment?")) Data.arr("feed", p.id, "comments", c, false); } })
               : canMod(c.by) ? h("button", { type: "button", class: "fd-mod", text: "Remove", title: "Remove this comment (moderation)", onclick: async () => {
@@ -502,7 +531,7 @@
         ...(p.by !== me && canMod(p.by) ? [{ sep: true }, { label: "Remove post", icon: "trash", danger: true, onClick: () => removePost(p) }] : []),
       ];
       const sub = [p.group ? h("span", { class: "fd-tol" }, "in ", h("a", { href: "#/app/groups/" + encodeURIComponent(p.group) + "/feed", text: groupName(p.group), style: { color: "var(--accent)", fontWeight: 600, textDecoration: "none" } }))
-        : h("span", { class: "fd-tol" }, "To: ", h("b", { text: audienceLabel(p.audience) })), " · ", h("span", { class: "fd-time", dataset: { at: p.at }, text: UI.timeAgo(p.at) }),
+        : h("span", { class: "fd-tol" }, "To: ", h("b", { text: audienceLabel(p.audience) })), " · ", h("span", { class: "fd-time", dataset: { at: p.at }, title: p.at ? fullWhen(p.at) : "", text: UI.timeAgo(p.at) }),
         p.kind === "poll" ? " · Poll" : p.kind === "event" ? " · Event" : null, p.edited ? h("span", { class: "fd-edited", text: " · edited" }) : null];
       const cls = "feed-post glass" + (p.kind === "announce" ? " announce" : "") + (p.pinned ? " pinned" : "") + (unreadImportant(p, meP) ? " unread-imp" : "");
       return h("article", { class: cls, dataset: { id: p.id }, style: { animationDelay: firstDraw ? Math.min(i * 40, 300) + "ms" : "0ms" } },
@@ -511,7 +540,7 @@
           h("button", { class: "icon-btn xs", title: "More", html: UI.icon("dots"), onclick: e => UI.menu(e.currentTarget, menuItems, { align: "end" }) })),
         ...body,
         h("div", { class: "fp-bar" },
-          h("button", { type: "button", class: "like" + (liked ? " on" : ""), title: likes.map(k => Data.person(k).name).join(", "), onclick: () => Data.arr("feed", p.id, "likes", me, !liked) }, (liked ? "❤️" : "🤍") + " " + (likes.length || "Like")),
+          h("button", { type: "button", class: "like" + (liked ? " on" : ""), title: likes.map(k => Data.person(k).name).join(", "), onclick: () => Data.arr("feed", p.id, "likes", me, !liked) }, (liked ? "❤️" : "🤍") + " " + (likes.length || likeText())),
           h("button", { type: "button", class: "like", onclick: () => cin.focus() }, `💬 ${cs.length || "Comment"}`),
           h("span", { class: "grow" }),
           likes.length ? h("span", { class: "fd-likers" }, Apps.avatars(likes, 20, 4)) : null),
@@ -524,7 +553,8 @@
     }
 
     // live: every like, comment, vote, RSVP and new post from anyone shows up immediately
-    const offs = [Data.on("feed", draw), Data.on("people", redrawAll)];
+    let prefsSeen = false;
+    const offs = [Data.on("feed", draw), Data.on("people", redrawAll), window.Prefs ? Prefs.on(() => { const first = !prefsSeen; prefsSeen = true; paintTools(); paintFilters(); if (!first) redrawAll(); }) : () => {}];
     // keep "2 min ago" fresh without rebuilding posts
     const tick = setInterval(refreshTimes, 60000);
     offs.push(() => (dead = true), () => clearInterval(tick), () => clearTimeout(laterT), () => document.removeEventListener("mousedown", onDocDown), () => { revoke(pending); cfiles.forEach(revoke); });

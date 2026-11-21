@@ -13,6 +13,12 @@ service cloud.firestore {
       function wsAdmin(d) { return wsRole(d) == 'admin'; }
       function wsManager(d) { return wsRole(d) == 'manager'; }
       function touched() { return request.resource.data.diff(resource.data).affectedKeys(); }
+      function inviteRule() {
+        let s = /databases/$(database)/documents/workspaces/$(ws)/settings/workspace;
+        return exists(s) ? get(s).data.get('people', {}).get('invite', 'managers') : 'managers';
+      }
+      // adding people (never removing): managers unless invites are admins-only; members and managers when everyone may invite
+      function addsMembersOnly() { return touched().hasOnly(['members']) && request.resource.data.members.hasAll(resource.data.members); }
       // admins name the one person a write changes in `roleEdit`: only that person's role entry may change, only they
       // may leave the members list (adding new members is fine), and they must not be an admin before or after
       function adminEditOk(before, after) {
@@ -60,9 +66,8 @@ service cloud.firestore {
                 && !touched().hasAny(['owner', 'ownerEmail', 'pendingOwner'])
                 && ownerKept(resource.data, request.resource.data)
                 && adminEditOk(resource.data, request.resource.data))
-            || (wsManager(resource.data)
-                && touched().hasOnly(['members'])
-                && request.resource.data.members.hasAll(resource.data.members))
+            || (wsManager(resource.data) && inviteRule() != 'admins' && addsMembersOnly())
+            || (wsRole(resource.data) == 'member' && inviteRule() == 'all' && addsMembersOnly())
             || takesOwnership(resource.data, request.resource.data)
             || !touched().hasAny(['members', 'owner', 'ownerEmail', 'roles', 'perms', 'roleEdit', 'pendingOwner']));
       allow delete: if signedIn() && resource.data.owner == request.auth.uid;
@@ -107,9 +112,15 @@ service cloud.firestore {
           || (coll in ['campaigns', 'segments'] && (sees(d, r, 'marketing')))
           || (coll in ['kbspaces', 'kbarticles'] && (sees(d, r, 'kb')));
       }
+      // Settings → workspace sections: everyone can read, only the owner and admins can change
+      function wsAdminNow() {
+        let d = get(/databases/$(database)/documents/workspaces/$(ws)).data;
+        return d.owner == request.auth.uid || d.get('roles', {}).get(myEmail(), 'member') == 'admin';
+      }
       // business apps (tasks, chat, CRM, …): members whose level can view the app
       match /{coll}/{docId} {
-        allow read, write: if isMember(ws) && coll in ['people', 'notifications', 'settings', 'files', 'folders', 'tasks', 'projects', 'chat', 'channels', 'feed', 'events', 'leads', 'deals', 'contacts', 'companies', 'products', 'quotes', 'activities', 'history', 'items', 'forms', 'formsubs', 'absences', 'timelog', 'reports', 'shifts', 'meetings', 'bookings', 'inventory', 'rules', 'lists', 'listitems', 'processes', 'procitems', 'workflows', 'wfruns', 'dashboards', 'boards', 'boardels', 'signdocs', 'campaigns', 'segments', 'kbspaces', 'kbarticles'] && canUse(coll);
+        allow read, write: if isMember(ws) && coll in ['people', 'notifications', 'settings', 'files', 'folders', 'tasks', 'projects', 'chat', 'channels', 'feed', 'events', 'leads', 'deals', 'contacts', 'companies', 'products', 'quotes', 'activities', 'history', 'items', 'forms', 'formsubs', 'absences', 'timelog', 'reports', 'shifts', 'meetings', 'bookings', 'inventory', 'rules', 'lists', 'listitems', 'processes', 'procitems', 'workflows', 'wfruns', 'dashboards', 'boards', 'boardels', 'signdocs', 'campaigns', 'segments', 'kbspaces', 'kbarticles'] && canUse(coll)
+          && !(coll == 'settings' && docId == 'workspace' && request.method != 'get' && request.method != 'list' && !wsAdminNow());
       }
       // CRM web forms: anyone with the link can read a published form...
       match /forms/{formId} {

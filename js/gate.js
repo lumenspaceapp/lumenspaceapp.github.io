@@ -35,12 +35,14 @@
       catch (e) { send.disabled = false; send.textContent = "Email me a sign-in link"; msg.textContent = "Couldn't send the link: " + (e.code || e.message); }
     } });
     inp.addEventListener("keydown", e => { if (e.key === "Enter") send.click(); });
+    // the last workspace opened on this device switched email-link sign-in off (Settings → Security; cached by js/apps/settings.js)
+    const links = localStorage.getItem("lumen-email-links") !== "0";
     el.replaceChildren(card(
       h("h1", { text: "Welcome to Lumen" }),
       h("p", { class: "gate-sub", text: "Your team's tasks, chat, calendar, CRM and files in one place. Sign in to continue." }),
       google,
-      h("div", { class: "gate-or" }, h("span", { text: "or" })),
-      inp, send, msg,
+      links ? h("div", { class: "gate-or" }, h("span", { text: "or" })) : null,
+      links ? inp : null, links ? send : null, msg,
       h("p", { class: "gate-fine", text: "Invited by a teammate? Sign in with the email address the invite was sent to." })));
   }
 

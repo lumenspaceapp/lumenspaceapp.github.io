@@ -17,8 +17,19 @@
     const def = reg[name];
     if (!def) { v.append(h("div", { class: "big-empty" }, h("div", { text: "🧩" }), "Unknown app")); return; }
     // access roles (js/access.js): apps my role can't view show a friendly notice instead
-    if (name !== "home" && Apps.can && !Apps.can(name, "view")) {
+    if (name !== "home" && name !== "settings" && Apps.can && !Apps.can(name, "view")) { // personal settings are for everyone; workspace sections lock themselves
       v.append(Apps.Access?.denied ? Apps.Access.denied(def) : h("div", { class: "big-empty acc-denied" }, h("div", { text: "🔒" }), `You don't have access to ${def.title}. Ask an admin.`));
+      document.title = def.title + " · Lumen"; renderNav(); return;
+    }
+    // tools an admin switched off in Settings → Tools
+    if (!toolOn(name)) {
+      const admin = Apps.isAdmin ? Apps.isAdmin() : true;
+      v.append(h("div", { class: "tool-off" }, h("div", { class: "tool-off-card glass" },
+        h("div", { class: "tool-off-ic", text: def.icon || "🧩" }),
+        h("h2", { text: `${def.title} is switched off` }),
+        h("p", { text: admin ? "This tool is switched off for the whole workspace. You can turn it back on in Settings → Tools." : "This tool is switched off for the whole workspace. Ask an admin if you need it." }),
+        h("div", { class: "tool-off-acts" }, admin ? h("button", { class: "btn primary", text: "Turn it on in Settings", onclick: () => Apps.go("settings", "tools") }) : null,
+          h("button", { class: "btn", text: "Go home", onclick: () => App.go("home") })))));
       document.title = def.title + " · Lumen"; renderNav(); return;
     }
     const root = h("div", { class: "app app-" + name });
@@ -54,15 +65,30 @@
   /* ---------- sidebar section ---------- */
   const badges = {};
   Apps.badge = (name, n) => { badges[name] = n; const el = document.querySelector(`.app-nav [data-app="${name}"] .count`); if (el) el.textContent = n ? n : ""; };
-  function renderNav() {
+  // is an app switched on for the workspace? (home and settings always are)
+  const toolOn = n => n === "home" || n === "settings" || !window.Prefs || Prefs.tool(n);
+  Apps.toolOn = toolOn;
+  // sidebar apps in my order (Settings → Sidebar menu), without the ones I hid, switched-off tools and apps my level can't open
+  Apps.menuApps = () => {
+    const m = (window.Prefs && window.Data ? Prefs.me().menu : null) || {}, pos = new Map((m.order || []).map((n, i) => [n, i]));
+    return order.filter(n => !reg[n].hidden).sort((a, b) => (pos.has(a) ? pos.get(a) : 1e3 + order.indexOf(a)) - (pos.has(b) ? pos.get(b) : 1e3 + order.indexOf(b)));
+  };
+  let navSig = "";
+  function renderNav(force) {
     let box = document.getElementById("appNav");
     if (!box) {
       const sec = h("div", { class: "sb-section" }, h("div", { class: "sb-label", text: "Apps" }), box = h("div", { class: "tree app-nav", id: "appNav" }));
       document.querySelector(".sb-scroll").prepend(sec);
     }
+    let hidden = [];
+    try { hidden = window.Prefs && window.Data ? Prefs.me().menu.hidden || [] : []; } catch {}
+    const list = Apps.menuApps().filter(n => !hidden.includes(n) && toolOn(n) && !(Apps.can && !Apps.can(n, "view"))); // hide apps my role can't view
+    const sig = list.join(",") + "|" + current;
+    if (force === "if-changed" && sig === navSig && box.children.length) return;
+    navSig = sig;
     box.innerHTML = "";
-    order.forEach(n => {
-      const d = reg[n]; if (d.hidden || (Apps.can && !Apps.can(n, "view"))) return; // hide apps my role can't view
+    list.forEach(n => {
+      const d = reg[n];
       box.append(h("div", { class: "tree-row" + (current === n ? " active" : ""), dataset: { app: n }, onclick: () => { Apps.go(n); if (innerWidth < 760) App.toggleSidebar(false); } },
         h("span", { class: "p-icon", text: d.icon }), h("span", { class: "p-title", text: d.title }), h("span", { class: "count", text: badges[n] || "" })));
     });
@@ -287,7 +313,7 @@
   }
 
   /* ---------- @mentions ---------- */
-  const handleOf = p => (p.name || "").split(" ")[0].toLowerCase();
+  const handleOf = p => (p.first || p.fullName || p.name || "").split(" ")[0].toLowerCase(); // @firstname, whatever the name format
   const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   // person keys mentioned as @firstname in a text
   function mentioned(text) {
@@ -391,8 +417,49 @@
   const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const today = () => iso(new Date());
   const addDays = (d, n) => { const x = new Date(d + "T00:00"); x.setDate(x.getDate() + n); return iso(x); };
-  const fmtDate = d => d ? new Date(d + (d.length === 10 ? "T00:00" : "")).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
-  const currency = () => localStorage.getItem("lumen-currency") || (Intl.DateTimeFormat().resolvedOptions().timeZone === "Asia/Calcutta" || Intl.DateTimeFormat().resolvedOptions().timeZone === "Asia/Kolkata" ? "INR" : "USD");
+  /* dates and times follow Settings → Language & region (my device override first, then the workspace) */
+  const region = () => { try { return window.Prefs ? Prefs.region() : {}; } catch { return {}; } };
+  const pad2 = n => String(n).padStart(2, "0");
+  const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  // date parts of a timestamp in the chosen time zone
+  function zoned(ms, tz) {
+    const d = new Date(ms);
+    if (!tz) return { y: d.getFullYear(), m: d.getMonth() + 1, d: d.getDate(), h: d.getHours(), mi: d.getMinutes() };
+    try {
+      const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: tz, year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", hourCycle: "h23" }).formatToParts(d).map(x => [x.type, x.value]));
+      return { y: +p.year, m: +p.month, d: +p.day, h: +p.hour % 24, mi: +p.minute };
+    } catch { return zoned(ms, ""); }
+  }
+  // "YYYY-MM-DD" (or a Date / ms timestamp) → short date in the chosen format; the year shows when it isn't this year (always for numeric formats)
+  function fmtDate(d, opts = {}) {
+    if (d == null || d === "") return "";
+    let y, m, day;
+    if (typeof d === "string" && /^\d{4}-\d{2}-\d{2}/.test(d) && d.length <= 10) [y, m, day] = d.split("-").map(Number);
+    else { const ms = d instanceof Date ? d.getTime() : typeof d === "number" ? d : Date.parse(d); if (isNaN(ms)) return String(d); ({ y, m, d: day } = zoned(ms, region().timezone)); }
+    const f = region().dateFormat || "auto", thisYear = y === new Date().getFullYear() && !opts.year;
+    if (f === "dmy") return thisYear ? `${day} ${MON[m - 1]}` : `${day} ${MON[m - 1]} ${y}`;
+    if (f === "mdy_num") return `${pad2(m)}/${pad2(day)}/${y}`;
+    if (f === "dmy_num") return `${pad2(day)}/${pad2(m)}/${y}`;
+    if (f === "iso") return `${y}-${pad2(m)}-${pad2(day)}`;
+    return new Date(y, m - 1, day).toLocaleDateString(undefined, thisYear ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "numeric" });
+  }
+  // "HH:MM" (wall clock), a Date or a ms timestamp → "9:30 AM" or "09:30"
+  function fmtTime(t) {
+    if (t == null || t === "") return "";
+    let hh, mm;
+    if (typeof t === "string" && /^\d{1,2}:\d{2}/.test(t)) [hh, mm] = t.split(":").map(Number);
+    else { const ms = t instanceof Date ? t.getTime() : +t; if (isNaN(ms)) return String(t); ({ h: hh, mi: mm } = zoned(ms, region().timezone)); }
+    if (region().time24) return `${pad2(hh)}:${pad2(mm)}`;
+    return `${hh % 12 || 12}:${pad2(mm)} ${hh < 12 ? "AM" : "PM"}`;
+  }
+  // a Date or ms timestamp → "21 Nov, 9:30 AM"
+  function fmtDateTime(t) {
+    if (t == null || t === "") return "";
+    const ms = t instanceof Date ? t.getTime() : typeof t === "number" ? t : Date.parse(t);
+    if (isNaN(ms)) return String(t);
+    return fmtDate(ms) + ", " + fmtTime(ms);
+  }
+  const currency = () => { try { const c = window.Prefs && Prefs.get("region.currency"); if (c) return c; } catch {} return localStorage.getItem("lumen-currency") || (Intl.DateTimeFormat().resolvedOptions().timeZone === "Asia/Calcutta" || Intl.DateTimeFormat().resolvedOptions().timeZone === "Asia/Kolkata" ? "INR" : "USD"); };
   const money = n => { try { return new Intl.NumberFormat(undefined, { style: "currency", currency: currency(), maximumFractionDigits: 0 }).format(+n || 0); } catch { return (+n || 0).toLocaleString(); } };
   const empty = (ic, text, btn) => h("div", { class: "app-empty" }, h("div", { class: "ae-ic", text: ic }), h("div", { text }), btn || null);
 
@@ -433,9 +500,20 @@
   Apps.onWorkspace.add(() => setTimeout(ensureAvatar, 1200));
   Apps.ensureAvatar = ensureAvatar;
 
-  Object.assign(Apps, { chooseAvatar, avatar, avatars, colorFor, personPicker, peoplePicker, form, panel, header, tabs, iso, today, addDays, fmtDate, money, currency, empty,
+  Object.assign(Apps, { chooseAvatar, avatar, avatars, colorFor, personPicker, peoplePicker, form, panel, header, tabs, iso, today, addDays, fmtDate, fmtTime, fmtDateTime, money, currency, empty,
     pickFiles, attach, openFile, fileChip, fileSize, mentioned, mentionAssist, handleOf, liveTasks, isMyTask, canSeeChat, eventsBetween });
 
-  Apps.init = () => { renderNav(); initBell(); };
+  Apps.init = () => {
+    renderNav(); initBell();
+    // settings changed (tools on/off) or my profile changed (menu order): refresh the sidebar, and the open app if its tool was switched on/off
+    const onSettings = () => {
+      renderNav("if-changed");
+      const cur = current, v = document.getElementById("view");
+      if (!cur || !reg[cur] || v.querySelector(".acc-denied")) return;
+      if (toolOn(cur) === !!v.querySelector(".tool-off")) dispatchEvent(new HashChangeEvent("hashchange")); // shown state no longer matches the switch
+    };
+    const watch = () => { Data.on("settings", onSettings); Data.on("people", () => renderNav("if-changed")); };
+    watch();
+  };
   window.Apps = Apps;
 })();

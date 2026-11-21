@@ -46,7 +46,7 @@
   const canEdit = () => (Apps.can ? Apps.can("sign", "edit") : true);
   const pname = k => k === "__employee" ? "Employee" : k === "__company" ? "Company" : Data.person(k).name;
   const first = k => String(pname(k) || "").split(" ")[0];
-  const fmtTs = t => t ? new Date(t).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "";
+  const fmtTs = t => t ? (Apps.fmtDateTime?.(t) ?? new Date(t).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })) : ""; // Settings → Region
   const fmtDay = t => t ? new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric", year: new Date(t).getFullYear() === new Date().getFullYear() ? undefined : "numeric" }) : "";
   const utc = t => t ? new Date(t).toISOString().replace("T", " ").slice(0, 19) + " UTC" : "—";
   const todayText = () => new Date().toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });

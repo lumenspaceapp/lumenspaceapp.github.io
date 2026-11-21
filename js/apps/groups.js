@@ -25,6 +25,13 @@
   const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
   const dayDiff = (a, b) => Math.round((new Date(b + "T00:00") - new Date(a + "T00:00")) / 864e5);
   const mondayOf = d => Apps.addDays(d, -((new Date(d + "T00:00").getDay() + 6) % 7));
+  // workspace settings (js/prefs.js): Scrum (Tools → Tasks), video calls (Tools → Chat), business hours, region
+  const toolOn = (app, f) => !window.Prefs || Prefs.tool(app, f);
+  const scrumOn = () => toolOn("tasks", "scrum");
+  const hrs = () => (window.Prefs ? Prefs.get("hours") : null) || { weekend: [0, 6], weekStart: 1 };
+  const weekStartOf = d => { const ws = +(hrs().weekStart ?? 1) || 0; return Apps.addDays(d, -((new Date(d + "T00:00").getDay() - ws + 7) % 7)); };
+  const isWeekend = d => (Array.isArray(hrs().weekend) ? hrs().weekend : [0, 6]).includes(new Date(d + "T00:00").getDay());
+  const fmtHM = hm => { if (!hm || !Apps.fmtTime) return hm || ""; const r = Apps.fmtTime(hm); return r && !/invalid/i.test(r) ? r : hm; };
   const st = k => STATUS.find(s => s[0] === (k || "todo")) || STATUS[0];
 
   /* ---------- membership & visibility ---------- */
@@ -187,7 +194,7 @@
           h("span", { class: "gr-ch-ic", text: ic }), h("b", { text: l }), h("small", { text: sub }))));
         paint(); return box;
       };
-      const typeBox = choices(TYPES, "type"), privBox = choices(PRIV, "privacy");
+      const typeBox = choices(scrumOn() || v.type === "scrum" ? TYPES : Object.fromEntries(Object.entries(TYPES).filter(([k]) => k !== "scrum")), "type"), privBox = choices(PRIV, "privacy");
       const colors = h("div", { class: "accents" }, ...COLORS.map(c => h("button", { type: "button", class: v.color === c ? "on" : "", style: { background: c, color: c }, onclick: e => { v.color = c; paintAv(); colors.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === e.currentTarget)); } })));
       const dIn = key => { const i = h("input", { type: "date", class: "menu-input", value: v[key] }); i.onchange = () => (v[key] = i.value); return i; };
       const dates = h("div", { class: "gr-ed-row" }, field("Start", dIn("start")), field("Finish", dIn("finish")));
@@ -336,7 +343,7 @@
       Data.update("events", ev.id, { project: p.id });
       const g = Data.get("projects", p.id) || p;
       Object.keys(ev.attendees || {}).filter(k => k !== me).forEach(k => Data.notify(k, `📅 ${who()} invited you to “${esc(ev.title)}” in <b>${esc(g.name)}</b>`, LINK(p.id, "calendar"),
-        Apps.fmtDate(ev.date) + (ev.start ? " · " + ev.start : "")));
+        Apps.fmtDate(ev.date) + (ev.start ? " · " + fmtHM(ev.start) : "")));
     };
     const mo = new MutationObserver(() => { if (!bd.isConnected) { mo.disconnect(); setTimeout(tag, 60); } });
     mo.observe(layer, { childList: true });
@@ -413,7 +420,7 @@
     }
     function paintTabs() {
       const p = g(), n = membersOf(p).length;
-      const items = TABS.filter(([k]) => k !== "scrum" || p.type === "scrum").map(([k, l]) => [k, k === "members" ? `${l} · ${n}` : l]);
+      const items = TABS.filter(([k]) => k !== "scrum" || (p.type === "scrum" && scrumOn())).map(([k, l]) => [k, k === "members" ? `${l} · ${n}` : l]);
       tabsBox.replaceChildren(Apps.tabs(items, tab, setTab));
       tabsBox.querySelector("button.on")?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
     }
@@ -423,7 +430,7 @@
       if (!member && !p.archived) btns.push(r === "requested" ? h("button", { class: "btn", text: "⏳ Requested · Cancel", onclick: () => cancelRequest(p) })
         : h("button", { class: "btn primary", text: privacy(p) === "open" ? "👋 Join" : "🙋 Request to join", onclick: () => join(p) }));
       if (member && !isOld(p) && (canManage(p) || privacy(p) === "open")) btns.push(h("button", { class: "btn", text: "+ Invite", onclick: e => invite(e.currentTarget, p) }));
-      if (member) btns.push(h("button", { class: "btn", text: "💬 Chat", onclick: () => openChat(p) }), h("button", { class: "btn", text: "📹 Video call", onclick: () => videoCall(p) }));
+      if (member) btns.push(h("button", { class: "btn", text: "💬 Chat", onclick: () => openChat(p) }), toolOn("chat", "calls") ? h("button", { class: "btn", text: "📹 Video call", onclick: () => videoCall(p) }) : null);
       btns.push(h("button", { class: "icon-btn gr-more", title: "More", html: UI.icon("dots"), onclick: e => moreMenu(e.currentTarget, p) }));
       head.style.setProperty("--gc", p.color || COLORS[0]);
       head.replaceChildren(
@@ -465,8 +472,9 @@
       const p = g();
       subOffs.forEach(f => f()); subOffs = [];
       if (tab === "scrum" && p.type !== "scrum") tab = "feed";
-      gateKey = [canRead(p), p.type, tab].join("|");
-      mounted = GATED.has(tab) && !canRead(p) ? { el: gate(p) } : MODS[tab](p, { setTab });
+      gateKey = [canRead(p), p.type, tab, scrumOn()].join("|");
+      mounted = tab === "scrum" && !scrumOn() ? { el: Apps.empty("🔌", "Scrum is switched off in Settings → Tools.") }
+        : GATED.has(tab) && !canRead(p) ? { el: gate(p) } : MODS[tab](p, { setTab });
       body.replaceChildren(h("div", { class: "gr-pane" }, mounted.el));
       (DEPS[tab] || []).forEach(col => { let init = true; subOffs.push(Data.on(col, () => { if (!init) later(); })); init = false; });
     }
@@ -482,9 +490,9 @@
       }
       document.title = (p.name || "Workgroup") + " · Lumen";
       paintHead(); paintTabs();
-      if (!mounted || [canRead(p), p.type, tab].join("|") !== gateKey) mount(); else later();
+      if (!mounted || [canRead(p), p.type, tab, scrumOn()].join("|") !== gateKey) mount(); else later();
     }
-    const offs = [Data.on("projects", refresh), Data.on("people", () => { if (canSee(g())) { paintHead(); later(); } })];
+    const offs = [Data.on("projects", refresh), Data.on("people", () => { if (canSee(g())) { paintHead(); later(); } }), window.Prefs ? Prefs.on(() => { if (g()) refresh(); }) : () => {}];
     return () => { offs.forEach(f => f()); subOffs.forEach(f => f()); clearTimeout(laterT); };
   }
 
@@ -852,12 +860,12 @@
     const box = h("div", { class: "gr-cal" });
     const openEv = o => Apps.Calendar?.openEvent ? Apps.Calendar.openEvent(o.ev.id, o.date) : (location.hash = "#/app/calendar/" + encodeURIComponent(o.ev.id));
     const evChip = o => h("button", { class: "cal-chip gr-ev", style: { "--c": o.ev.color || "var(--accent)" }, title: o.ev.title || "Event", onclick: e => { e.stopPropagation(); openEv(o); } },
-      (o.allDay || !o.start ? "" : o.start + " ") + (o.ev.title || "Event"));
+      (o.allDay || !o.start ? "" : fmtHM(o.start) + " ") + (o.ev.title || "Event"));
     const tkChip = t => h("button", { class: "cal-chip gr-tk" + (t.status === "done" ? " done" : ""), style: { "--c": "var(--c-orange)" }, title: "Task deadline: " + (t.title || ""), onclick: e => { e.stopPropagation(); openTask(t.id); } }, "✅ " + (t.title || "Task"));
     function draw() {
       const g = Data.get("projects", id); if (!g) return;
       const member = isMember(g) && !g.archived;
-      const [y, m] = month.split("-").map(Number), first = month + "-01", start = mondayOf(first), dim = new Date(y, m, 0).getDate();
+      const [y, m] = month.split("-").map(Number), first = month + "-01", start = weekStartOf(first), dim = new Date(y, m, 0).getDate();
       const weeks = Math.ceil((dayDiff(start, first) + dim) / 7), end = Apps.addDays(start, weeks * 7 - 1);
       const occ = (Apps.eventsBetween ? Apps.eventsBetween(start, Apps.addDays(T() > end ? T() : end, 60)) : []).filter(o => o.ev && o.ev.project === id);
       const tasks = groupTasks(id).filter(t => t.deadline && t.deadline >= start && t.deadline <= end);
@@ -870,11 +878,11 @@
         h("button", { class: "icon-btn", title: "Next month", text: "›", onclick: () => shift(1) }),
         h("b", { class: "gr-cal-label", text: new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" }) }),
         h("span", { class: "grow" }), member ? h("button", { class: "btn primary", text: "+ Event", onclick: () => addEvent(g, month === T().slice(0, 7) ? T() : first) }) : null);
-      const wd = [0, 1, 2, 3, 4, 5, 6].map(i => new Date(2024, 0, 1 + i).toLocaleDateString(undefined, { weekday: "short" }));
+      const wd = [0, 1, 2, 3, 4, 5, 6].map(i => new Date(Apps.addDays(start, i) + "T00:00").toLocaleDateString(undefined, { weekday: "short" }));
       const grid = h("div", { class: "cal-grid gr-cal-grid" }, ...wd.map(d => h("div", { class: "cal-wd", text: d })));
       for (let i = 0; i < weeks * 7; i++) {
         const date = Apps.addDays(start, i), evs = evDay[date] || [], tks = tkDay[date] || [], items = [...evs.map(evChip), ...tks.map(tkChip)];
-        grid.append(h("div", { class: "cal-day" + (date.slice(0, 7) !== month ? " other" : "") + (date === T() ? " today" : ""), title: member ? "Add an event on " + Apps.fmtDate(date) : "",
+        grid.append(h("div", { class: "cal-day" + (date.slice(0, 7) !== month ? " other" : "") + (date === T() ? " today" : "") + (isWeekend(date) ? " we" : ""), title: member ? "Add an event on " + Apps.fmtDate(date) : "",
           onclick: e => { if (member && !e.target.closest(".cal-chip,.cal-more")) addEvent(g, date); } },
           h("span", { class: "cal-n", text: +date.slice(8) }), ...items.slice(0, 3),
           items.length > 3 ? h("button", { class: "cal-more", text: `+${items.length - 3} more`, onclick: e => { e.stopPropagation(); UI.popover(e.currentTarget, h("div", { class: "gr-daypop" }, h("div", { class: "menu-sec", text: Apps.fmtDate(date) }), ...[...evs.map(evChip), ...tks.map(tkChip)])); } }) : null));
@@ -884,7 +892,7 @@
         h("div", { class: "td-sec", text: "Coming up" }),
         upcoming.length ? h("div", { class: "gr-agenda" }, ...upcoming.map((o, i) => h("button", { class: "gr-ag glass", style: { "--c": o.ev.color || "var(--accent)", animationDelay: i * 30 + "ms" }, onclick: () => openEv(o) },
           h("span", { class: "gr-ag-d" }, h("small", { text: new Date(o.date + "T00:00").toLocaleDateString(undefined, { month: "short" }) }), h("b", { text: +o.date.slice(8) })),
-          h("span", { class: "gr-ag-t" }, h("b", { text: o.ev.title || "Event" }), h("small", { text: [o.allDay || !o.start ? "All day" : o.start + (o.finish ? " – " + o.finish : ""), o.ev.where].filter(Boolean).join(" · ") })),
+          h("span", { class: "gr-ag-t" }, h("b", { text: o.ev.title || "Event" }), h("small", { text: [o.allDay || !o.start ? "All day" : fmtHM(o.start) + (o.finish ? " – " + fmtHM(o.finish) : ""), o.ev.where].filter(Boolean).join(" · ") })),
           o.ev.video ? h("span", { class: "gr-mute", text: "📹" }) : null)))
           : h("div", { class: "gr-hint", text: member ? "No upcoming events. Click a day or “+ Event” to plan one; members are invited automatically." : "No upcoming events." }));
     }
@@ -997,7 +1005,7 @@
       const s = stats(id), [tIc, tL] = TYPES[typeOf(g)], [pIc, pL, pSub] = PRIV[privacy(g)], read = canRead(g);
       const info = [["Type", tIc + " " + tL], ["Privacy", `${pIc} ${pL} · ${pSub}`], ["Owner", ownerOf(g) ? Data.person(ownerOf(g)).name : "—"],
         g.start || g.finish ? ["Dates", [g.start ? Apps.fmtDate(g.start) : "…", g.finish ? Apps.fmtDate(g.finish) : "…"].join(" – ")] : null,
-        ["Created", g.at ? new Date(g.at).toLocaleDateString() : "—"], ["Members", String(membersOf(g).length)]].filter(Boolean);
+        ["Created", g.at ? Apps.fmtDate(Apps.iso(new Date(g.at))) : "—"], ["Members", String(membersOf(g).length)]].filter(Boolean);
       const sp = g.type === "scrum" && read ? activeSprint(g) : null;
       const daysLeft = g.finish ? dayDiff(T(), g.finish) : null;
       box.replaceChildren(

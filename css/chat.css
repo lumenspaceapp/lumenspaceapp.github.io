@@ -276,3 +276,17 @@ html[data-theme=dark] .cx .msg.mine .cx-bub { background: color-mix(in srgb, var
   .cx-side-top { padding: 10px 8px 6px; }
   .cx-pin { padding: 6px 8px 6px 12px; }
 }
+
+/* link preview card (Settings → Communications → link previews) */
+.cx-link-card { display: flex; align-items: center; gap: 10px; margin-top: 6px; padding: 8px 10px; max-width: 340px; border-radius: 12px; text-decoration: none; color: inherit;
+  background: var(--glass); border: 1px solid var(--line); border-left: 3px solid var(--accent); }
+.cx-link-card:hover { background: var(--hover); }
+.cx-link-card.yt { flex-direction: column; align-items: stretch; padding: 0 0 8px; overflow: hidden; }
+.cx-link-card.yt .cx-link-t { padding: 0 10px; }
+.cx-link-img { position: relative; display: block; aspect-ratio: 16 / 9; background: #000; }
+.cx-link-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cx-link-img i { position: absolute; inset: 0; margin: auto; width: 44px; height: 32px; display: grid; place-items: center; border-radius: 9px; background: rgba(220, 20, 20, .9); color: #fff; font-style: normal; font-size: 14px; }
+.cx-link-t { display: grid; min-width: 0; }
+.cx-link-t b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cx-link-t small { color: var(--muted); font-size: 12px; }
+@media (max-width: 760px) { .cx-link-card { max-width: 100%; } }

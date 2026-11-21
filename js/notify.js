@@ -20,8 +20,8 @@
   const unlock = () => { try { actx ||= new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === "suspended") actx.resume(); } catch {} };
   addEventListener("pointerdown", unlock, { capture: true, passive: true });
   addEventListener("keydown", unlock, { capture: true });
-  function chime() {
-    if (!prefs.sound || !actx || actx.state !== "running") return;
+  function chime(force) {
+    if ((!prefs.sound && !force) || !actx || actx.state !== "running") return;
     const t = actx.currentTime;
     [[784, 0], [1175, .09]].forEach(([f, d]) => {
       const o = actx.createOscillator(), g = actx.createGain();
@@ -62,8 +62,8 @@
   }
 
   /* ---------- system notification (works in a background tab / installed app) ---------- */
-  async function system({ title, body, link, tag }) {
-    if (!prefs.desktop || perm() !== "granted") return false;
+  async function system({ title, body, link, tag }, force) {
+    if ((!prefs.desktop && !force) || perm() !== "granted") return false;
     const opts = { body, tag: tag || undefined, renotify: !!tag, icon: "assets/icon-192.png", badge: "assets/favicon-48.png", data: { link: link || "" } };
     try {
       const reg = "serviceWorker" in navigator && await navigator.serviceWorker.getRegistration();
@@ -76,15 +76,32 @@
   // clicking a system notification: the service worker focuses this tab and passes the link
   navigator.serviceWorker?.addEventListener("message", e => { if (e.data?.type === "lumen-open" && e.data.link) location.hash = e.data.link; });
 
+  /* which kind of alert is this? (Settings → Notifications has switches per kind; Prefs.NOTIFY_TYPES) */
+  const LINK_TYPES = [["#/app/chat", "chat"], ["#/app/tasks", "tasks"], ["#/app/groups", "tasks"], ["#/app/feed", "feed"], ["#/app/calendar", "calendar"], ["#/app/booking", "calendar"],
+    ["#/app/crm", "crm"], ["#/app/marketing", "crm"], ["#/app/company", "hr"], ["#/app/automation", "automation"], ["#/app/sign", "automation"]];
+  function typeOf(n) {
+    if (n.type) return n.type;
+    if (/mentioned you/i.test(strip(n.title || ""))) return "mentions";
+    const l = String(n.link || ""), hit = LINK_TYPES.find(([p]) => l === p || l.startsWith(p + "/"));
+    return hit ? hit[1] : "other";
+  }
+  const P = () => window.Prefs && window.Data ? Prefs : null;
   const recent = new Map(); // don't repeat the same alert (e.g. a DM arriving as both a chat message and a bell item)
   function alert(n) {
     const key = n.dedupe || n.title + "|" + n.body;
     if (recent.has(key) && Date.now() - recent.get(key) < 8000) return;
     recent.set(key, Date.now());
+    // my per-type switches and do-not-disturb (alerts still reach the bell: those are notification docs, not these pop-ups)
+    const test = n.type === "test", type = typeOf(n), pr = P();
+    if (!test && pr && pr.inDnd()) return;
+    const on = ch => test || !pr || pr.notifyOn(type, ch);
+    const showCard = on("card"), sound = on("sound"), desk = on("desktop");
+    if (!showCard && !sound && !desk) return;
+    const pop = () => { if (showCard) card(n); if (sound) chime(); };
     if (away()) {
       missed++; paintCount();
-      system(n).then(shown => { if (!shown && document.visibilityState === "visible") { card(n); chime(); } });
-    } else { card(n); chime(); }
+      (desk ? system(n) : Promise.resolve(false)).then(shown => { if (!shown && document.visibilityState === "visible") pop(); });
+    } else pop();
   }
 
   /* ---------- watchers ---------- */
@@ -110,7 +127,7 @@
       const chName = dm ? "" : window.ChatAccess?.title ? ChatAccess.title(m.channel) : "#" + ((chDoc || {}).name || m.channel);
       const title = m.kind === "sys" ? (chName || who.name) : m.kind === "call" ? `📹 ${who.name} started a video call${dm ? "" : " in " + chName}`
         : dm ? who.name : mentioned ? `${who.name} mentioned you in ${chName}` : `${who.name} in ${chName}`;
-      alert({ title, body: m.kind === "call" ? "Tap to join" : String(m.text || "").slice(0, 140) || ((m.files || []).length ? "📎 " + m.files.map(f => f.name).join(", ") : ""), link: "#/app/chat/" + encodeURIComponent(m.channel),
+      alert({ type: mentioned ? "mentions" : "chat", title, body: m.kind === "call" ? "Tap to join" : String(m.text || "").slice(0, 140) || ((m.files || []).length ? "📎 " + m.files.map(f => f.name).join(", ") : ""), link: "#/app/chat/" + encodeURIComponent(m.channel),
         person: who, tag: "chat-" + m.channel, dedupe: "chat|" + m.channel + "|" + m.by });
     });
   }
@@ -140,7 +157,7 @@
       remember(r, dk);
       if (mine.length) {
         const late = mine.filter(t => t.deadline < today).length;
-        alert({ title: `✅ ${mine.length} task${mine.length > 1 ? "s" : ""} due today${late ? ` (${late} overdue)` : ""}`, body: mine.slice(0, 3).map(t => t.title).join(" · "), link: "#/app/tasks", icon: "✅", tag: "tasks-today" });
+        alert({ type: "tasks", title: `✅ ${mine.length} task${mine.length > 1 ? "s" : ""} due today${late ? ` (${late} overdue)` : ""}`, body: mine.slice(0, 3).map(t => t.title).join(" · "), link: "#/app/tasks", icon: "✅", tag: "tasks-today" });
       }
     }
   }
@@ -199,12 +216,12 @@
       row("Test", "Check that notifications work on this device", h("button", { class: "btn", text: "Send a test", onclick: () => {
         unlock();
         UI.toast(perm() === "granted" && prefs.desktop ? "Switch to another tab or app: a test arrives in 4 seconds" : "A test arrives in 4 seconds");
-        setTimeout(() => alert({ title: "🔔 Test notification", body: "Notifications are working on this device.", icon: "🔔", tag: "lumen-test", dedupe: "test" + Date.now() }), 4000);
+        setTimeout(() => alert({ type: "test", title: "🔔 Test notification", body: "Notifications are working on this device.", icon: "🔔", tag: "lumen-test", dedupe: "test" + Date.now() }), 4000);
       } })),
     ];
   }
 
-  window.Notify = { start, enable, settingsRows, prefs, perm, alert };
+  window.Notify = { start, enable, settingsRows, prefs, perm, alert, typeOf, savePrefs, chime: () => { unlock(); setTimeout(() => chime(true), 50); } };
   Apps.onWorkspace.add(start); // signed in / switched workspace
   start();
 })();

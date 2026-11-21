@@ -232,3 +232,11 @@
   .app-feed .fd-cfiles { margin-left: 0; }
   .fd-aud, .fd-who { width: min(300px, calc(100vw - 30px)); }
 }
+
+/* Settings → Communications: audience rules */
+.fd-tag.fd-tag-empty { opacity: .75; border-style: dashed; }
+.fd-aud-why { flex-basis: 100%; font-size: 12px; color: var(--muted); }
+.fd-aud-note { white-space: normal; text-align: left; line-height: 1.4; }
+
+/* parts switched off in Settings → Tools are hidden with the hidden attribute */
+.app-tabs > button[hidden], .app-actions > [hidden], .seg > button[hidden], .tk-eff[hidden] { display: none !important; }

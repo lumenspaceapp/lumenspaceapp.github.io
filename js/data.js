@@ -94,23 +94,37 @@
       const prof = (local.people || {}).me || {};
       return { key: "me", name: prof.name || s.userName || "You", email: "", photo: "", avatar: s.avatar ?? prof.avatar ?? "" };
     },
+    // a full name shown the way Settings → Employees → Name format says (John Smith / Smith John / John S. / J. Smith)
+    formatName(full, f) {
+      full = String(full || "").trim();
+      const parts = full.split(/\s+/);
+      if (parts.length < 2 || full.includes("@")) return full;
+      if (!f) { f = "first_last"; try { f = ((window.Data && Data.get("settings", "workspace")) || {}).people?.nameFormat || f; } catch {} }
+      const first = parts[0], last = parts.slice(1).join(" ");
+      return f === "last_first" ? last + " " + first : f === "first_l" ? first + " " + last[0].toUpperCase() + "." : f === "f_last" ? first[0].toUpperCase() + ". " + last : full;
+    },
     people() {
       const me = Data.me();
-      if (!cloud()) { const prof = Data.get("people", "me") || {}; return [{ ...prof, ...me, avatar: me.avatar, title: prof.title || "", dept: prof.dept || "", phone: prof.phone || "", about: prof.about || "", online: true }]; }
+      const fmt = ((Data.get("settings", "workspace") || {}).people || {}).nameFormat || "first_last";
+      const named = p => ({ ...p, fullName: p.name, first: String(p.name || "").trim().split(/\s+/)[0] || "", name: fmt === "first_last" ? p.name : Data.formatName(p.name, fmt) });
+      if (!cloud()) { const prof = Data.get("people", "me") || {}; return [named({ ...prof, ...me, avatar: me.avatar, title: prof.title || "", dept: prof.dept || "", phone: prof.phone || "", about: prof.about || "", online: true })]; }
       const profiles = Object.fromEntries(list("people").map(p => [p.id, p]));
       const online = Object.fromEntries((Cloud.people || []).map(p => [String(p.email || "").toLowerCase(), p]));
       return (Cloud.ws.members || []).map(email => {
         const p = profiles[email] || {}, o = online[email] || {};
         const self = email === me.key;
-        return { key: email, email, name: p.alias || p.name || o.name || email.split("@")[0], alias: p.alias || "", photo: p.photo || o.photo || "", avatar: self ? me.avatar : (p.avatar ?? o.avatar ?? ""), title: p.title || "", dept: p.dept || "", phone: p.phone || "", about: p.about || "", birthday: p.birthday || "", joined: p.joined || "",
-          online: !!o.at && Date.now() - (o.at.toMillis?.() || 0) < 70000 };
+        return named({ key: email, email, name: p.alias || p.name || o.name || email.split("@")[0], alias: p.alias || "", photo: p.photo || o.photo || "", avatar: self ? me.avatar : (p.avatar ?? o.avatar ?? ""), title: p.title || "", dept: p.dept || "", phone: p.phone || "", about: p.about || "", birthday: p.birthday || "", joined: p.joined || "",
+          online: !!o.at && Date.now() - (o.at.toMillis?.() || 0) < 70000 });
       });
     },
     person(key) { return Data.people().find(p => p.key === key) || { key, name: key === "me" ? "You" : String(key || "Someone").split("@")[0], photo: "" }; },
     // keep my profile card up to date for teammates: `name` is always the account name; `alias` (a chosen display name) is never touched here
     syncMe() {
       if (!cloud()) return;
-      const me = Data.me(), cur = Data.get("people", me.key), name = me.accountName || me.name;
+      const me = Data.me(), ws = Cloud.ws;
+      // first visit to this workspace on this device: check on the server whether I'm new here before my profile gets written
+      if (!welcomed.has(ws.id + "|" + me.key)) { welcomed.add(ws.id + "|" + me.key); welcome(me).finally(() => { if (Cloud.ws?.id === ws.id) Data.syncMe(); }); return; }
+      const cur = Data.get("people", me.key), name = me.accountName || me.name;
       const chosen = !!Store.local.settings.avatarChosen;
       if (!cur || cur.name !== name || cur.photo !== me.photo || (cur.avatar || "") !== me.avatar || (chosen && !cur.avatarChosen))
         Data.update("people", me.key, { name, photo: me.photo, email: me.email, avatar: me.avatar, ...(chosen ? { avatarChosen: true } : {}) });
@@ -125,6 +139,25 @@
     },
     notify(to, text, link, body) { if (!to || to === Data.me().key) return; Data.add("notifications", { to, text, link: link || "", read: false, ...(body ? { body: String(body).slice(0, 300) } : {}) }); },
   };
+  /* a new member opens the workspace for the first time (no profile on the server yet): note when they joined and,
+     if Settings → Employees says so, announce them in #general and/or the Feed. Runs once per member per workspace. */
+  const welcomed = new Set();
+  async function welcome(me) {
+    const ws = window.Cloud?.ws, fs = window.Cloud?.fs;
+    if (!ws || !fs || !fs.ref() || (ws.members || []).length < 2 || window.Apps?.role?.() === "owner") return; // the owner just created it
+    try {
+      const { fb, ref } = fs, wsId = ws.id;
+      let snap; try { snap = await Promise.race([fb.getDocFromServer(fb.doc(ref(), "people", me.key)), new Promise((_, no) => setTimeout(() => no(new Error("slow")), 8000))]); } catch { return; } // offline
+      if (window.Cloud.ws?.id !== wsId) return;
+      const prof = snap.exists() ? snap.data() : null;
+      if (prof && (prof.email || prof.welcomed)) return; // been here before (my own app always saves my email)
+      const now = new Date(), d = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      await Data.update("people", me.key, { ...(prof?.joined ? {} : { joined: d }), welcomed: true });
+      const P = window.Prefs ? Prefs.ws() : null, an = (P && P.people.announceNew) || {}, who = Data.formatName(me.name);
+      if (P && (an.chat || P.comms.announceJoins)) Data.add("chat", { channel: "general", kind: "sys", text: `👋 ${who} joined the workspace. Say hello!`, reactions: {} });
+      if (P && an.feed) Data.add("feed", { kind: "announce", text: `👋 Please welcome ${who}, who just joined the team!`, likes: [], comments: [], audience: { all: true }, readBy: [] });
+    } catch (e) { console.warn("welcome", e); }
+  }
   const clean = o => JSON.parse(JSON.stringify(o));
   const err = e => { console.error(e); UI.toast(e.code === "permission-denied" ? "You don't have access to save this here. Ask an admin." : "Couldn't save: " + (e.code || e.message)); };
   window.Data = Data;

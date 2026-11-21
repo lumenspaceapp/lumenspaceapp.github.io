@@ -35,6 +35,14 @@
   const leadTag = k => { const s = LEAD_ST.find(x => x[0] === k) || LEAD_ST[0]; return tagEl(s[1], s[2]); };
   const startOfDay = (t = Date.now()) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
 
+  /* ---------- workspace settings (js/prefs.js): Tools → CRM sub-features, default phone country code, region ---------- */
+  const toolOn = f => !window.Prefs || Prefs.tool("crm", f);
+  // tab → feature key in Settings → Tools (smart-process tabs are "sp:<id>")
+  const tabFeature = t => String(t || "").startsWith("sp:") ? "smart" : ["products", "estimates", "invoices", "forms", "analytics"].includes(t) ? t : null;
+  const tabOn = t => { const f = tabFeature(t); return !f || toolOn(f); };
+  const phonePrefix = () => { const c = String((window.Prefs && Prefs.get("people.phoneCountry")) || "").trim().replace(/[^\d+]/g, ""); return /^\+?\d{1,4}$/.test(c) ? "+" + c.replace("+", "") + " " : ""; };
+  const fmtHM = hm => { try { const r = Apps.fmtTime?.(hm); if (r && !/invalid|nan/i.test(r)) return r; } catch {} return null; };
+
   /* ---------- settings: pipelines, custom fields, smart processes ---------- */
   const cfg = () => Data.get("settings", "crm") || {};
   const saveCfg = patch => Data.update("settings", "crm", patch);
@@ -181,11 +189,11 @@
   let NX = new Map();
   function when(ms) {
     if (!ms) return "No deadline";
-    const d = new Date(ms), t0 = startOfDay(), hm = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    const d = new Date(ms), t0 = startOfDay(), hm = fmtHM(ms) || d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
     if (ms >= t0 && ms < t0 + DAY) return "Today " + hm;
     if (ms >= t0 + DAY && ms < t0 + 2 * DAY) return "Tomorrow " + hm;
     if (ms >= t0 - DAY && ms < t0) return "Yesterday " + hm;
-    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) + ", " + hm;
+    return Apps.fmtDate(Apps.iso(d)) + ", " + hm;
   }
   const late = a => !!(a && a.due && a.due < Date.now() && !a.done);
   function nextChip(a, empty = true) {
@@ -231,6 +239,8 @@
     if (col === "items") vals.stage = vals.stage || st.stages?.[0]?.id || "";
     if (col === "deals") { const pid = pipeline(vals.pipeline).id; vals._stage = pid + "::" + (stagesFor(pid).some(s => s.id === vals.stage) ? vals.stage : stagesFor(pid)[0]?.id); }
     Object.entries(vals.custom || {}).forEach(([k, v]) => { vals["cf_" + k] = v; });
+    const pfx = ["leads", "contacts", "companies"].includes(col) ? phonePrefix() : ""; // Settings → People → default phone country code
+    if (pfx && !String(vals.phone || "").trim()) vals.phone = pfx;
     const title = (isNew ? "New " : "Edit ") + (col === "items" ? (st.name || "item").toLowerCase() : LABEL[col]);
     const pending = Apps.form(title, [...base, ...cfFormFields(cfs)], vals, { ok: isNew ? "Create" : "Save" });
     if (col === "leads" || col === "contacts" || col === "companies") dupWatch(col, rec.id);
@@ -238,6 +248,7 @@
     if (!v) return null;
     const data = {};
     base.forEach(f => { if (f.key !== "_stage") data[f.key] = v[f.key] ?? ""; });
+    if (pfx && String(data.phone || "").trim() === pfx.trim()) data.phone = ""; // only the country code: no phone
     if (cfs.length || rec.custom) {
       const custom = { ...(rec.custom || {}) };
       cfs.forEach(f => { const x = v["cf_" + f.key]; custom[f.key] = f.type === "checkbox" ? !!x : x ?? ""; });
@@ -438,7 +449,7 @@
     const aiCtx = () => { const r = Data.get(col, id) || {}; return [`${cap(typeLabel(col))}: ${recName(r)}`, r.company ? "Company: " + name("companies", r.company) : r.companyName ? "Company: " + r.companyName : "",
       col === "deals" || col === "items" ? "Stage: " + stageOf(col, r).name : col === "leads" && r.status ? "Lead status: " + r.status : "", r.amount ? "Amount: " + Apps.money(r.amount) : "",
       "Recent activity:", ...actsFor(col, id).sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, 8).map(a => `- ${ATYPES[a.type]?.[1] || "Activity"}${a.done ? "" : " (planned)"}: ${a.subject || ""}`)].filter(Boolean).join("\n"); };
-    const aiMail = Apps.AI?.available() ? Apps.AI.button("Draft email", () => Apps.AI.compose({ title: "Draft email", task: "email_draft", input: subj.value.trim() || "A friendly follow-up on where things stand",
+    const aiMail = Apps.AI?.available("crm") ? Apps.AI.button("Draft email", () => Apps.AI.compose({ title: "Draft email", task: "email_draft", input: subj.value.trim() || "A friendly follow-up on where things stand",
       context: aiCtx(), insertLabel: "Use this", onInsert: v => { subj.value = v; subj.focus(); } })) : null;
     function paint() {
       if (aiMail) aiMail.hidden = type !== "email";
@@ -536,7 +547,7 @@
       if (f.type === "number") return add(f.label, (+v).toLocaleString());
       add(f.label, String(v));
     });
-    add("Created", new Date(r.at || Date.now()).toLocaleDateString() + " by " + Data.person(r.by).name);
+    add("Created", Apps.fmtDate(Apps.iso(new Date(r.at || Date.now()))) + " by " + Data.person(r.by).name);
     return h("div", { class: "td-grid crm-info" }, ...info);
   }
   function related(col, r) {
@@ -556,8 +567,8 @@
     const qs = Data.list("quotes").filter(q => q.deal === d.id && !q.deleted).sort((a, b) => (b.at || 0) - (a.at || 0));
     return h("div", { class: "crm-docs" },
       h("div", { class: "crm-doc-btns" },
-        h("button", { class: "btn", text: "📝 Create estimate", onclick: () => newQuote("estimate", Data.get("deals", d.id)) }),
-        h("button", { class: "btn", text: "🧾 Create invoice", onclick: () => newQuote("invoice", Data.get("deals", d.id)) })),
+        toolOn("estimates") ? h("button", { class: "btn", text: "📝 Create estimate", onclick: () => newQuote("estimate", Data.get("deals", d.id)) }) : null,
+        toolOn("invoices") ? h("button", { class: "btn", text: "🧾 Create invoice", onclick: () => newQuote("invoice", Data.get("deals", d.id)) }) : null),
       qs.length ? h("div", { class: "crm-doc-list" }, ...qs.map(q => h("button", { class: "crm-doc", onclick: () => Apps.Sales?.openQuote ? Apps.Sales.openQuote(q.id) : UI.toast("Documents aren't available right now") },
         h("span", { class: "crm-doc-ic", text: q.kind === "invoice" ? "🧾" : "📝" }),
         h("span", { class: "crm-doc-t" }, h("b", { text: q.number || cap(q.kind || "estimate") }), h("small", { text: (q.title || cap(q.kind || "")) + (q.issue ? " · " + Apps.fmtDate(q.issue) : "") })),
@@ -614,8 +625,8 @@
         col === "deals" || col === "items" ? stageBar(col, r) : null,
         col === "leads" && r.status !== "converted" ? h("button", { class: "btn primary crm-convert", text: "🔁 Convert to contact + deal", onclick: () => convert(r) }) : null,
         h("div", { class: "crm-sec glass" }, h("div", { class: "crm-sec-h", text: "About" }), infoGrid(col, r), r.notes ? h("div", { class: "crm-notes", text: r.notes }) : null),
-        col === "deals" ? h("div", { class: "crm-sec glass" }, h("div", { class: "crm-sec-h", text: "Products" }), prodBox) : null,
-        col === "deals" ? h("div", { class: "crm-sec glass" }, h("div", { class: "crm-sec-h", text: "Estimates & invoices" }), dealDocs(r)) : null,
+        col === "deals" && toolOn("products") ? h("div", { class: "crm-sec glass" }, h("div", { class: "crm-sec-h", text: "Products" }), prodBox) : null,
+        col === "deals" && (toolOn("estimates") || toolOn("invoices") || Data.list("quotes").some(q => q.deal === r.id && !q.deleted)) ? h("div", { class: "crm-sec glass" }, h("div", { class: "crm-sec-h", text: "Estimates & invoices" }), dealDocs(r)) : null,
         rel.length ? h("div", { class: "crm-sec glass" }, h("div", { class: "crm-sec-h", text: "Related" }), ...rel) : null,
         h("div", { class: "td-sec", text: "Activity" }),
         comp,
@@ -1101,7 +1112,7 @@
     const cur = h("select", { class: "app-select", title: "Currency", onchange: e => { localStorage.setItem("lumen-currency", e.target.value); draw(); } }, ...["INR", "USD", "EUR", "GBP", "AED"].map(c => h("option", { value: c, selected: Apps.currency() === c }, c)));
     const more = h("button", { class: "icon-btn crm-more", title: "CRM settings", html: UI.icon("dots"), onclick: () => UI.menu(more, [
       { label: "Pipelines & stages…", iconHtml: "🛤️", onClick: () => configurePipelines(curPipe()) },
-      { label: "Smart processes…", iconHtml: "🧩", onClick: () => configureSmart(id => setTab("sp:" + id)) },
+      toolOn("smart") ? { label: "Smart processes…", iconHtml: "🧩", onClick: () => configureSmart(id => setTab("sp:" + id)) } : null,
       { section: "Custom fields" }, ...ENT.map(c => ({ label: cap(PLURAL[c]), iconHtml: ICON[c], onClick: () => configureFields(c) })),
       { sep: true }, { label: "Recycle bin", icon: "trash", onClick: () => setTab("bin") },
     ], { align: "end" }) });
@@ -1120,7 +1131,8 @@
     }
     function tabList() {
       return [["deals", "Deals"], ["leads", "Leads"], ["contacts", "Contacts"], ["companies", "Companies"], ["my", "My activities"],
-        ...smartTypes().map(t => ["sp:" + t.id, (t.icon || "🧩") + " " + t.name]), ["products", "Products"], ["estimates", "Estimates"], ["invoices", "Invoices"], ["forms", "Forms"], ["analytics", "Analytics"]];
+        ...smartTypes().map(t => ["sp:" + t.id, (t.icon || "🧩") + " " + t.name]), ["products", "Products"], ["estimates", "Estimates"], ["invoices", "Invoices"], ["forms", "Forms"], ["analytics", "Analytics"]]
+        .filter(([k]) => tabOn(k) || k === tab);
     }
     function drawTabs() {
       const list = tabList(), sig = JSON.stringify(list) + "|" + tab;
@@ -1302,6 +1314,12 @@
       if (tab.startsWith("sp:") && !smartType(spId()) && (cfg().smart || Date.now() - t0 > 2500)) tab = "deals";
       drawTabs(); drawSummary(); drawTools();
       const sp = smartType(spId());
+      if (!tabOn(tab)) { // switched off in Settings → Tools (also blocks deep links)
+        dropExt(); addBtn.style.display = "none";
+        body.replaceChildren(Apps.empty("🔌", ({ smart: "Smart processes are", products: "Products are", estimates: "Estimates are", invoices: "Invoices are", forms: "Web forms are", analytics: "CRM analytics is" })[tabFeature(tab)] + " switched off in Settings → Tools.",
+          h("button", { class: "btn", text: "Go to deals", onclick: () => setTab("deals") })));
+        return;
+      }
       addBtn.style.display = isEnt(tab) || sp ? "" : "none";
       addBtn.textContent = sp ? "+ New " + (sp.name || "item").toLowerCase() : isEnt(tab) ? "+ New " + LABEL[tab] : "";
       if (EXT.includes(tab)) {

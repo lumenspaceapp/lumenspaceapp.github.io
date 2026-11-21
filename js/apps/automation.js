@@ -353,6 +353,7 @@
     throw new Error("Unknown action");
   }
   async function run(trigger, rec, extra = {}) {
+    if (window.Prefs && !Prefs.tool("automation", "rules")) return; // rules switched off in Settings → Tools
     const t = TRIGGERS[trigger]; if (!t) return;
     const rules = Data.list("rules").filter(r => r.enabled !== false && r.trigger === trigger);
     if (!rules.length) return;
@@ -678,7 +679,7 @@
       }
       body.replaceChildren(
         h("div", { class: "au-ph" }, h("span", { class: "au-ph-ic", text: r.icon || wf.icon || "📋" }), h("div", null, h("h2", { text: r.name || wf.name || "Approval" }),
-          h("div", { class: "au-ph-sub" }, statusPill(r), Apps.avatar(Data.person(r.by), 20), h("small", { text: pname(r.by) + " · " + new Date(r.at).toLocaleString() })))),
+          h("div", { class: "au-ph-sub" }, statusPill(r), Apps.avatar(Data.person(r.by), 20), h("small", { text: pname(r.by) + " · " + (Apps.fmtDateTime?.(r.at) ?? new Date(r.at).toLocaleString()) })))),
         r.about ? h("div", { class: "au-quote", text: r.about }) : null,
         decideBox,
         h("div", { class: "td-sec", text: "Details" }), valuesGrid(wf.fields, r.values),
@@ -1274,6 +1275,10 @@
      APP SHELL
      ===================================================================== */
   const TABS = [["rules", "Rules"], ["approvals", "Approvals"], ["rpa", "RPA"], ["lists", "Lists"], ["analytics", "Analytics"]];
+  // Settings → Tools → Automation: rules, approvals, rpa, lists can be switched off (default on)
+  const toolOn = f => !window.Prefs || Prefs.tool("automation", f);
+  const tabOn = k => k === "analytics" || toolOn(k);
+  const OFF_TXT = { rules: "Automation rules are", approvals: "Approvals are", rpa: "RPA processes are", lists: "Lists are" };
   const badgeFns = new Set();
   function updateBadge() { const n = pending().length; Apps.badge("automation", n); badgeFns.forEach(f => { try { f(n); } catch {} }); }
   setTimeout(() => Data.on("wfruns", updateBadge), 1500);
@@ -1296,7 +1301,10 @@
     const paintTab = n => { apBtn.replaceChildren("Approvals", n ? h("span", { class: "au-count", text: n }) : null); };
     badgeFns.add(paintTab); paintTab(pending().length);
     const body = h("div", { class: "au-body" });
-    root.append(Apps.header("Automation", "⚡", "Rules, approvals, processes and lists", h("button", { class: "btn", text: "📝 Start a process", onclick: () => startDialog() })), tabsEl, body);
+    const startBtn = h("button", { class: "btn", text: "📝 Start a process", onclick: () => startDialog() });
+    root.append(Apps.header("Automation", "⚡", "Rules, approvals, processes and lists", startBtn), tabsEl, body);
+    let toolSig = "";
+    const paintTools = () => { TABS.forEach(([k], i) => { if (tabsEl.children[i]) tabsEl.children[i].hidden = !tabOn(k) && k !== st.tab; }); startBtn.hidden = !toolOn("approvals"); };
 
     let offs = [], raf = 0;
     const nav = {
@@ -1306,7 +1314,8 @@
     const VIEWS = { rules: viewRules, approvals: viewApprovals, rpa: viewRPA, lists: viewLists, analytics: viewAnalytics };
     function mount() {
       offs.forEach(f => f()); offs = []; cancelAnimationFrame(raf);
-      const v = VIEWS[st.tab](st, nav), content = h("div", { class: "au-content" });
+      paintTools(); toolSig = TABS.map(([k]) => tabOn(k)).join();
+      const v = tabOn(st.tab) ? VIEWS[st.tab](st, nav) : { cols: [], draw: box => box.replaceChildren(Apps.empty("🔌", OFF_TXT[st.tab] + " switched off in Settings → Tools.")) }, content = h("div", { class: "au-content" });
       const run = () => { try { v.draw(content); } catch (e) { console.error("automation view", e); } };
       v.refresh = run;
       body.replaceChildren(h("div", { class: "au-view au-in" }, v.tools || null, content));
@@ -1316,12 +1325,14 @@
       v.cols.forEach(c => offs.push(Data.on(c, sched)));
     }
     mount();
-    if (openRunId) setTimeout(() => openRun(openRunId), 80);
-    return () => { offs.forEach(f => f()); cancelAnimationFrame(raf); badgeFns.delete(paintTab); [...panelOffs].forEach(f => f()); };
+    if (openRunId && toolOn("approvals")) setTimeout(() => openRun(openRunId), 80);
+    // settings changed: remount only when a sub-feature was switched on or off
+    const offPrefs = window.Prefs ? Prefs.on(() => { if (TABS.map(([k]) => tabOn(k)).join() !== toolSig) mount(); }) : () => {};
+    return () => { offPrefs(); offs.forEach(f => f()); cancelAnimationFrame(raf); badgeFns.delete(paintTab); [...panelOffs].forEach(f => f()); };
   }
 
   Apps.Workflows = {
-    start(workflowId, values) { return values ? startRun(workflowId, values) : startDialog(workflowId); },
+    start(workflowId, values) { if (!toolOn("approvals")) return UI.toast("Approvals are switched off in Settings → Tools."); return values ? startRun(workflowId, values) : startDialog(workflowId); },
     pending, open: openRun,
   };
   Apps.register("automation", { title: "Automation", icon: "⚡", render });

@@ -32,11 +32,14 @@
             h("p", { class: "hm-sum", text: "You have " + bits.join(" · ") + "." }))),
         h("div", { class: "hm-qas" },
           act("✅", "New task", () => Apps.Tasks.newTask()), act("📅", "Event", () => Apps.Calendar.editEvent()),
-          act("📣", "Post", () => Apps.go("feed")), act("📹", "Video call", startCall), window.FEATURES?.pages !== false ? act("📄", "Page", () => App.newPage()) : act("👋", "Invite", e => window.Cloud ? Cloud.share(e.currentTarget) : UI.toast("Sharing is still loading"))));
+          act("📣", "Post", () => Apps.go("feed")), ...(window.Prefs && !Prefs.tool("chat", "calls") ? [] : [act("📹", "Video call", startCall)]), window.FEATURES?.pages !== false ? act("📄", "Page", () => App.newPage()) : act("👋", "Invite", e => window.Cloud ? Cloud.share(e.currentTarget) : UI.toast("Sharing is still loading"))));
     }
     function startCall() {
       const url = `https://meet.jit.si/Lumen-${(window.Cloud?.ws?.id || "local").slice(0, 10)}-general`;
-      Data.add("chat", { channel: "general", kind: "call", url, text: "Video call", reactions: {} });
+      // only post the call card in #general when this person may post there (Settings → Communications)
+      const gp = window.Prefs ? Prefs.get("comms.generalPost", "all") : "all";
+      const mayPost = gp === "all" || (gp === "admins" ? (Apps.isAdmin?.() ?? true) : (Apps.role?.() ?? "owner") === "owner");
+      if (mayPost) Data.add("chat", { channel: "general", kind: "call", url, text: "Video call", reactions: {} });
       open(url, "_blank", "noopener"); UI.toast("📹 Call started, posted in #general");
     }
 

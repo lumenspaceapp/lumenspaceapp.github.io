@@ -32,6 +32,9 @@
   const minD = (a, b) => a < b ? a : b, maxD = (a, b) => a > b ? a : b;
   const inR = (d, a, b) => !!d && d >= a && d <= b;
   const fmtD = d => { if (!d) return ""; const x = dOf(d), y = x.getFullYear() !== new Date().getFullYear(); return x.toLocaleDateString(undefined, y ? { month: "short", day: "numeric", year: "numeric" } : { month: "short", day: "numeric" }); };
+  // times follow Settings → Region (Apps.fmtTime with "HH:MM", or the 24-hour switch) when available
+  const time24 = () => !!(window.Prefs && Prefs.get("region.time24"));
+  const fmtClock = ms => { try { const r = Apps.fmtTime?.(ms); if (r && !/invalid|nan/i.test(r)) return r; } catch {} return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); };
   const monLabel = (d, yr) => dOf(d).toLocaleDateString(undefined, yr ? { month: "short", year: "2-digit" } : { month: "short" });
   const WDAYS = Array.from({ length: 7 }, (_, i) => new Date(2024, 0, 1 + i).toLocaleDateString(undefined, { weekday: "short" })); // Monday first
 
@@ -234,7 +237,7 @@
   def("present_today", { source: "team", label: "Present today", desc: "People who clocked in today", unit: "count", snapshot: true, dims: ["dept"],
     list: { cols: [L("Name", "name"), L("Clocked in", "start"), L("Worked", "hours", "hours")] },
     rows: () => Data.list("timelog").filter(e => e.date === T() && e.start).map(e => ({ date: null, v: 1, person: e.who, g: { dept: deptOf(e.who) },
-      item: { name: pname(e.who), start: new Date(e.start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), hours: workedMs(e) / 36e5 } })) });
+      item: { name: pname(e.who), start: fmtClock(e.start), hours: workedMs(e) / 36e5 } })) });
   def("out_today", { source: "team", label: "Out today", desc: "People on approved leave today", unit: "count", snapshot: true, dims: ["type", "dept"],
     list: { cols: [L("Name", "name"), L("Type", "type"), L("Back after", "to", "date")] },
     rows: () => Data.list("absences").filter(a => absStat(a) === "approved" && inR(T(), a.from, a.to || a.from)).map(a => ({ date: null, v: 1, person: a.who, g: { type: absLabel(a.type), dept: deptOf(a.who) },
@@ -537,7 +540,7 @@
     d.grid.forEach(r => r.forEach((v, hr) => { if (v) { lo = Math.min(lo, hr); hi = Math.max(hi, hr); } }));
     lo = Math.min(lo, 8); hi = Math.max(hi, 18);
     const hours = Array.from({ length: hi - lo + 1 }, (_, i) => lo + i), max = Math.max(1, ...d.grid.flat());
-    const hl = hr => new Date(2024, 0, 1, hr).toLocaleTimeString([], { hour: "numeric" });
+    const hl = hr => time24() ? String(hr).padStart(2, "0") + ":00" : new Date(2024, 0, 1, hr).toLocaleTimeString([], { hour: "numeric" });
     box.replaceChildren(h("div", { class: "an-heat", style: { gridTemplateColumns: `38px repeat(${hours.length}, minmax(0, 1fr))` } },
       h("span"), ...hours.map((hr, i) => h("span", { class: "an-hh", text: i % 2 ? "" : hl(hr) })),
       ...d.grid.flatMap((row, di) => [h("span", { class: "an-hd", text: WDAYS[di] }), ...hours.map((hr, i) => {
@@ -869,7 +872,7 @@
         h("button", { class: "btn", text: "🖨️ Print", onclick: () => window.print() }),
         editable ? h("button", { class: "icon-btn", title: "Dashboard options", "aria-label": "Dashboard options", html: UI.icon("dots"), onclick: e => dashMenu(D, e.currentTarget) }) : null);
       const head = h("div", { class: "an-dh" }, h("span", { class: "an-dhi", text: D.icon }), h("div", { class: "an-dht" }, h("h2", { text: D.name }), h("small", { text: sub })), acts);
-      const printHead = h("div", { class: "an-print" }, `${D.name} · ${fmtD(r.from)} – ${fmtD(r.to)}${f.person ? " · " + pname(f.person) : ""} · printed ${new Date().toLocaleString()}`);
+      const printHead = h("div", { class: "an-print" }, `${D.name} · ${fmtD(r.from)} – ${fmtD(r.to)}${f.person ? " · " + pname(f.person) : ""} · printed ${Apps.fmtDateTime?.(Date.now()) ?? new Date().toLocaleString()}`);
       let used = true; if (!D.custom) { try { used = !!D.ready.used(); } catch {} }
       if (!used) {
         const app = SRC[D.ready.source].app;

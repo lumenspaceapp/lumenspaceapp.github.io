@@ -253,3 +253,6 @@ html[data-theme=dark] .au-pill { background: color-mix(in srgb, var(--pc) 22%, t
 @media (prefers-reduced-motion: reduce) {
   .au-app *, .au-panel * { animation: none !important; }
 }
+
+/* parts switched off in Settings → Tools are hidden with the hidden attribute */
+.app-tabs > button[hidden], .app-actions > [hidden], .seg > button[hidden], .tk-eff[hidden] { display: none !important; }

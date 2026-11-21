@@ -20,7 +20,19 @@
   const covers = (a, d) => a.from <= d && (a.to || a.from) >= d;
   const dmId = k => "dm:" + [ME(), k].sort().join("|");
   const toMin = t => { const m = /^(\d{1,2}):(\d{2})/.exec(t || ""); return m ? +m[1] * 60 + +m[2] : null; };
-  const fmtT = ms => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  // workspace settings (js/prefs.js): business hours (weekend, holidays, start/end), Tools → Company tabs, region, phone country code
+  const hrs = () => (window.Prefs ? Prefs.get("hours") : null) || { start: "09:00", end: "18:00", weekend: [0, 6], holidays: [] };
+  const okHM = (v, d) => /^\d{1,2}:\d{2}$/.test(v || "") ? v : d;
+  const dayStart = () => okHM(hrs().start, "09:00"), dayEnd = () => okHM(hrs().end, "18:00");
+  const weekendDays = () => Array.isArray(hrs().weekend) ? hrs().weekend : [0, 6];
+  const isHoliday = d => (Array.isArray(hrs().holidays) ? hrs().holidays : []).some(x => x && x.date === d);
+  const toolOn = f => !window.Prefs || Prefs.tool("company", f);
+  const TAB_FEATURE = { structure: "structure", requests: "absence", absence: "absence", worktime: "worktime", schedules: "schedules", reports: "reports", meetings: "meetings" };
+  const tabOn = k => !TAB_FEATURE[k] || toolOn(TAB_FEATURE[k]);
+  const fmtHM = hm => { if (!hm) return hm || ""; try { const r = Apps.fmtTime?.(hm); if (r && !/invalid|nan/i.test(r)) return r; } catch {} return hm; };
+  const span2 = (a, b) => fmtHM(a) + "–" + fmtHM(b);
+  const phonePrefix = () => { const c = String((window.Prefs && Prefs.get("people.phoneCountry")) || "").trim().replace(/[^\d+]/g, ""); return /^\+?\d{1,4}$/.test(c) ? "+" + c.replace("+", "") + " " : ""; };
+  const fmtT = ms => { try { const r = Apps.fmtTime?.(ms); if (r && !/invalid|nan/i.test(r)) return r; } catch {} return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); };
   const fmtN = n => String(Math.round(n * 10) / 10);
   const plural = (n, one, many) => `${fmtN(n)} ${n === 1 ? one : many || one + "s"}`;
   const nonEmpty = o => Object.fromEntries(Object.entries(o || {}).filter(([, v]) => v !== "" && v != null));
@@ -31,7 +43,8 @@
   const range = (a, b) => !b || a === b ? Apps.fmtDate(a) : Apps.fmtDate(a) + " – " + Apps.fmtDate(b);
   const monday = d => { const x = new Date((d || T()) + "T00:00"); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return Apps.iso(x); };
   const dow = d => new Date(d + "T00:00").getDay();
-  const isWork = d => dow(d) !== 0 && dow(d) !== 6;
+  // working day: not a weekend day and not a holiday (Settings → Business hours)
+  const isWork = d => !weekendDays().includes(dow(d)) && !isHoliday(d);
   const daysBetween = (from, to) => { const out = []; for (let d = from; d <= to && out.length < 400; d = Apps.addDays(d, 1)) out.push(d); return out; };
   const monthDays = m => { const y = m.getFullYear(), mo = m.getMonth(), n = new Date(y, mo + 1, 0).getDate(); return Array.from({ length: n }, (_, i) => Apps.iso(new Date(y, mo, i + 1))); };
   const dayShort = d => new Date(d + "T00:00").toLocaleDateString(undefined, { weekday: "short", day: "numeric" });
@@ -111,7 +124,7 @@
     const m = managerOf(key); if (m) return m;
     const a = admins(); return a.find(k => k !== key) || a[0] || key;
   }
-  // working days (Mon–Fri) an absence takes, optionally only those inside one year
+  // working days (weekend and holidays from Settings → Business hours excluded) an absence takes, optionally only those inside one year
   function workDays(a, year) {
     let from = a.from, to = a.to && a.to > a.from ? a.to : a.from;
     if (!from) return 0;
@@ -156,7 +169,7 @@
   const canEditMeeting = m => isAdmin() || m.chair === ME() || m.by === ME();
   const canWriteMeeting = m => canEditMeeting(m) || (m.attendees || []).includes(ME());
   const meetPeople = m => [...new Set([m.chair, ...(m.attendees || [])])].filter(Boolean);
-  const timeRange = m => m.start ? m.start + (m.finish ? "–" + m.finish : "") : "All day";
+  const timeRange = m => m.start ? fmtHM(m.start) + (m.finish ? "–" + fmtHM(m.finish) : "") : "All day";
 
   /* ======================================================================
      Shared actions (used from several tabs and from other apps)
@@ -167,8 +180,9 @@
     const dept = names.length ? { key: "dept", label: "Department", type: "select", half: true, options: [["", "No department"], ...names.map(n => [n, n])] } : { key: "dept", label: "Department", half: true };
     const v = await Apps.form("My profile", [{ key: "avatar", label: "Avatar", type: "avatar", photo: me.photo, person: me }, { key: "name", label: "Name", required: true }, { key: "title", label: "Job title", half: true }, dept,
       { key: "phone", label: "Phone", type: "tel", half: true }, { key: "birthday", label: "Birthday", type: "date", half: true }, { key: "joined", label: "Joined on", type: "date", half: true },
-      { key: "about", label: "About me", type: "textarea", rows: 3 }], { name: me.name, ...cur, dept: cur.dept || "", avatar: me.avatar || "" }, { width: 560 });
+      { key: "about", label: "About me", type: "textarea", rows: 3 }], { name: me.name, ...cur, phone: String(cur.phone || "").trim() || phonePrefix(), dept: cur.dept || "", avatar: me.avatar || "" }, { width: 560 });
     if (!v) return;
+    if (phonePrefix() && String(v.phone || "").trim() === phonePrefix().trim()) v.phone = "";
     const pick = ["title", "dept", "phone", "birthday", "joined", "about"], nm = String(v.name ?? "").trim();
     // shared workspace: the typed name is stored as `alias` (the account name in `name` is refreshed from Google on every sign-in)
     const naming = me.accountName ? { alias: nm && nm !== me.accountName ? nm : "" } : { name: nm };
@@ -272,7 +286,7 @@
         row("🏢", "Department", p.dept || "Not set"), row("👤", "Manager", mgr ? plink(mgr) : null),
         row("✉️", "Email", p.email ? h("a", { href: "mailto:" + p.email, text: p.email }) : null), row("📞", "Phone", p.phone ? h("a", { href: "tel:" + p.phone, text: p.phone }) : null),
         row("🎂", "Birthday", p.birthday && p.birthday.length >= 10 ? mdLong(p.birthday.slice(5)) : null), row("🎉", "Joined", p.joined ? new Date(p.joined + "T00:00").toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }) : null),
-        row("🕘", "Today's shift", sh ? `${sh.start}–${sh.finish}` : null)),
+        row("🕘", "Today's shift", sh ? span2(sh.start, sh.finish) : null)),
       p.about ? h("p", { class: "co-pf-about", text: p.about }) : null,
       canEditP && p.mgrNote ? h("div", { class: "co-pf-note" }, h("small", { text: "🔒 Manager note" }), h("p", { text: p.mgrNote })) : null,
       reports.length ? h("div", { class: "co-pf-sec" }, h("h4", { text: `Team · ${reports.length}` }), h("div", { class: "co-pf-team" }, ...reports.map(r => h("button", { class: "co-mem", onclick: () => openProfile(r.key) }, Apps.avatar(r, 24), h("span", { text: r.name }))))) : null,
@@ -443,8 +457,8 @@
 
   /* ---------- shift templates ---------- */
   function editTemplate(t) {
-    const name = input("text", t?.name, { placeholder: "e.g. Day shift" }), start = input("time", t?.start || "09:00"), finish = input("time", t?.finish || "18:00");
-    let color = t?.color || PALETTE[1], days = new Set(t?.days || [1, 2, 3, 4, 5]);
+    const name = input("text", t?.name, { placeholder: "e.g. Day shift" }), start = input("time", t?.start || dayStart()), finish = input("time", t?.finish || dayEnd());
+    let color = t?.color || PALETTE[1], days = new Set(t?.days || [0, 1, 2, 3, 4, 5, 6].filter(d => !weekendDays().includes(d)));
     const colors = h("div", { class: "accents" }), dayBox = h("div", { class: "co-days" });
     const paint = () => {
       colors.replaceChildren(...PALETTE.map(c => h("button", { type: "button", class: c === color ? "on" : "", style: { background: c, color: c }, onclick: () => { color = c; paint(); } })));
@@ -460,12 +474,12 @@
   }
   async function customShift(who, date, cur) {
     const v = await Apps.form("Shift · " + Data.person(who).name + " · " + dayShort(date), [{ key: "start", label: "Starts", type: "time", half: true, required: true }, { key: "finish", label: "Ends", type: "time", half: true, required: true }, { key: "note", label: "Note" }],
-      { start: cur?.start || "09:00", finish: cur?.finish || "18:00", note: cur?.note || "" });
+      { start: cur?.start || dayStart(), finish: cur?.finish || dayEnd(), note: cur?.note || "" });
     if (v) setShift(who, date, { start: v.start, finish: v.finish, note: v.note, template: null });
   }
   function cellMenu(anchor, who, date, cur) {
     UI.menu(anchor, [{ section: Data.person(who).name.split(" ")[0] + " · " + dayShort(date) },
-      ...templates().map(t => ({ label: `${t.name} · ${t.start}–${t.finish}`, iconHtml: `<i class="co-dot" style="background:${esc(t.color || PALETTE[0])}"></i>`, onClick: () => setShift(who, date, { start: t.start, finish: t.finish, template: t.id }) })),
+      ...templates().map(t => ({ label: `${t.name} · ${span2(t.start, t.finish)}`, iconHtml: `<i class="co-dot" style="background:${esc(t.color || PALETTE[0])}"></i>`, onClick: () => setShift(who, date, { start: t.start, finish: t.finish, template: t.id }) })),
       { label: "Custom time…", iconHtml: "🕘", onClick: () => customShift(who, date, cur) },
       cur ? { sep: true } : null, cur ? { label: "Remove shift", icon: "trash", danger: true, onClick: () => Data.remove("shifts", cur.id) } : null]);
   }
@@ -484,8 +498,8 @@
       { key: "start", label: "Starts", type: "time", half: true }, { key: "finish", label: "Ends", type: "time", half: true },
       { key: "chair", label: "Chair", type: "person", half: true }, { key: "attendees", label: "Attendees", type: "people", half: true, placeholder: "Invite people…" },
       ...(m ? [] : [{ key: "agenda", label: "Agenda (one item per line)", type: "textarea", rows: 4 }]),
-      { key: "video", label: "Add a video call link", type: "checkbox" },
-      ...(m?.event && Data.get("events", m.event) ? [] : [{ key: "cal", label: "Add to calendar", type: "checkbox" }])],
+      !window.Prefs || Prefs.tool("chat", "calls") ? { key: "video", label: "Add a video call link", type: "checkbox" } : null, // Settings → Tools → Chat → calls
+      ...(m?.event && Data.get("events", m.event) ? [] : [{ key: "cal", label: "Add to calendar", type: "checkbox" }])].filter(Boolean),
       m ? { ...m, video: !!m.video, cal: false } : { date: T(), start: "10:00", finish: "11:00", chair: ME(), attendees: [], video: false, cal: true }, { ok: m ? "Save" : "Create meeting", width: 580 });
     if (!v) return;
     const rec = { title: v.title.trim(), date: v.date, start: v.start || "", finish: v.finish || "", where: (v.where || "").trim(), chair: v.chair || ME(), attendees: v.attendees || [], video: v.video ? (m?.video || jitsi()) : "" };
@@ -559,14 +573,16 @@
 
     const body = h("div", { class: "app-body co-body" }), tabsBox = h("div", { class: "co-tabs" });
     root.classList.add("co-app");
+    const reqBtn = h("button", { class: "btn primary", text: "🌴 Request time off", onclick: () => requestTimeOff() });
     root.append(Apps.header("Company", "🏢", "Your team, structure, time off and working hours",
-      h("button", { class: "btn", text: "Edit my profile", onclick: editProfile }), h("button", { class: "btn primary", text: "🌴 Request time off", onclick: () => requestTimeOff() })), tabsBox, body);
+      h("button", { class: "btn", text: "Edit my profile", onclick: editProfile }), reqBtn), tabsBox, body);
 
     const toApprove = () => { const me = ME(), admin = isAdmin(); return Data.list("absences").filter(a => a.status === "pending" && (a.approver === me || admin)); };
     const toReview = () => { const me = ME(), admin = isAdmin(); return Data.list("reports").filter(r => r.status === "sent" && r.who !== me && (r.approver === me || admin)); };
     function paintTabs() {
       const nReq = toApprove().length, nRep = toReview().length;
-      tabsBox.replaceChildren(Apps.tabs(TABS.map(([k, l]) => [k, k === "requests" && nReq ? `${l} · ${nReq}` : k === "reports" && nRep ? `${l} · ${nRep}` : l]), tab, k => setTab(k)));
+      reqBtn.hidden = !toolOn("absence");
+      tabsBox.replaceChildren(Apps.tabs(TABS.filter(([k]) => tabOn(k) || k === tab).map(([k, l]) => [k, k === "requests" && nReq ? `${l} · ${nReq}` : k === "reports" && nRep ? `${l} · ${nRep}` : l]), tab, k => setTab(k)));
     }
     function setTab(k, sub) {
       S.flush?.(); S.flush = null;
@@ -790,7 +806,7 @@
         h("div", { class: "app-sub", text: new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }) }),
         h("div", { class: "clock-big co-clock-t", text: hm(worked(e)) }),
         h("div", { class: "app-sub", text: s === "off" ? "Not started yet" : s === "working" ? "Started at " + fmtT(e.start) : s === "paused" ? "On a break" : "Finished at " + fmtT(e.end) }),
-        h("div", { class: "co-shiftline" + (sh ? "" : " none"), style: sh ? { "--c": tpl?.color || PALETTE[0] } : {} }, sh ? `🕘 Today's shift ${sh.start}–${sh.finish}${tpl ? " · " + tpl.name : ""}` : out ? ABS[out.type]?.[0] + " today" : "No shift planned today"),
+        h("div", { class: "co-shiftline" + (sh ? "" : " none"), style: sh ? { "--c": tpl?.color || PALETTE[0] } : {} }, sh ? `🕘 Today's shift ${span2(sh.start, sh.finish)}${tpl ? " · " + tpl.name : ""}` : out ? ABS[out.type]?.[0] + " today" : "No shift planned today"),
         late ? h("span", { class: "tag co-late", dataset: { tc: "red" }, text: `Late by ${late} min` }) : null,
         h("div", { class: "clock-btns" }, ...btns));
       // this week: me, plus the people I manage
@@ -827,7 +843,7 @@
         ...rows.flatMap(r => [h("div", { class: "co-wt-n", onclick: () => openProfile(r.p.key) }, Apps.avatar(r.p, 22), h("span", { text: r.p.name })),
           ...r.cells.map(c => h("div", { class: "co-wt-c" + (isWork(c.d) ? "" : " we") + (c.d === t ? " today" : "") + (c.w ? " has" : "") + (c.late ? " late" : "") + (c.a ? " out" : ""),
             style: c.a ? { "--c": ABS[c.a.type]?.[1] || "#64748b" } : {},
-            title: [dayShort(c.d), c.w ? hm(c.w) : "", c.sh ? `shift ${c.sh.start}–${c.sh.finish}` : "", c.late ? `late by ${c.late} min` : "", c.a ? ABS[c.a.type]?.[0] : ""].filter(Boolean).join(" · "),
+            title: [dayShort(c.d), c.w ? hm(c.w) : "", c.sh ? `shift ${span2(c.sh.start, c.sh.finish)}` : "", c.late ? `late by ${c.late} min` : "", c.a ? ABS[c.a.type]?.[0] : ""].filter(Boolean).join(" · "),
             text: c.w ? (c.w / 36e5).toFixed(1) : c.a ? (ABS[c.a.type]?.[0] || "").split(" ")[0] : "" })),
           h("div", { class: "co-wt-t" }, h("b", { text: fmtN(r.ms / 36e5) })), h("div", { class: "co-wt-t", text: r.worked }), h("div", { class: "co-wt-t" + (r.lates ? " bad" : ""), text: r.lates }), h("div", { class: "co-wt-t", text: fmtN(r.off) })]));
       const cards = h("div", { class: "co-wt-cards" }, ...rows.map(r => h("div", { class: "co-wtc glass", onclick: () => openProfile(r.p.key) },
@@ -876,7 +892,7 @@
             const s = idx.get(p.key + "|" + d), a = abs.find(x => x.who === p.key && covers(x, d)), t = s?.template ? tplMap[s.template] : null;
             const cell = h("div", { class: "co-ros-c" + (d === T() ? " today" : "") + (isWork(d) ? "" : " we") + (can ? " can" : "") },
               h("span", { class: "co-dl", text: dayShort(d) }),
-              s ? h("span", { class: "co-shift", style: { "--c": t?.color || PALETTE[0] }, title: s.note || "" }, h("b", { text: `${s.start}–${s.finish}` }), t ? h("small", { text: t.name }) : s.note ? h("small", { text: s.note }) : null) : null,
+              s ? h("span", { class: "co-shift", style: { "--c": t?.color || PALETTE[0] }, title: s.note || "" }, h("b", { text: span2(s.start, s.finish) }), t ? h("small", { text: t.name }) : s.note ? h("small", { text: s.note }) : null) : null,
               a ? h("span", { class: "co-ros-abs", title: ABS[a.type]?.[0] || "Away", style: { "--c": ABS[a.type]?.[1] || "#64748b" }, text: (ABS[a.type]?.[0] || "Away").split(" ")[0] }) : null,
               !s && !a && can ? h("span", { class: "co-ros-add", text: "+" }) : null);
             if (can) cell.onclick = () => cellMenu(cell, p.key, d, s);
@@ -891,17 +907,17 @@
           canAny ? h("button", { class: "btn", text: "⧉ Copy last week", onclick: copyWeek }) : null, canAny ? h("button", { class: "btn", text: "Clear week", onclick: clearWeek }) : null),
         h("div", { class: "co-tpls" }, h("small", { class: "co-muted", text: "Shift templates" }),
           ...tpls.map(t => h("button", { class: "co-tpl", style: { "--c": t.color || PALETTE[0] }, title: (t.days || []).map(d => WD[d]).join(", "), onclick: () => canAny ? editTemplate(t) : null },
-            h("i"), h("b", { text: t.name }), h("small", { text: `${t.start}–${t.finish}` }))),
+            h("i"), h("b", { text: t.name }), h("small", { text: span2(t.start, t.finish) }))),
           canAny ? h("button", { class: "chip-btn", text: "+ Template", onclick: () => editTemplate() }) : null,
           canAny && !tpls.length ? h("button", { class: "chip-btn", text: "✨ Add standard shifts", onclick: () => {
-            [["Day", "09:00", "18:00", PALETTE[1], [1, 2, 3, 4, 5]], ["Morning", "07:00", "15:00", PALETTE[4], [1, 2, 3, 4, 5]], ["Evening", "15:00", "23:00", PALETTE[0], [1, 2, 3, 4, 5]]]
+            (wd => [["Day", dayStart(), dayEnd(), PALETTE[1], wd], ["Morning", "07:00", "15:00", PALETTE[4], wd], ["Evening", "15:00", "23:00", PALETTE[0], wd]])([0, 1, 2, 3, 4, 5, 6].filter(d => !weekendDays().includes(d)))
               .forEach(([name, start, finish, color, days]) => Data.add("shifts", { kind: "template", name, start, finish, color, days }));
           } }) : null),
         people.length ? h("div", { class: "co-roster glass", dataset: { keep: "ros" } }, head, ...rows) : Apps.empty("🗓️", "Nobody in this department."),
         canAny ? h("small", { class: "co-muted", text: "Click a cell to assign a shift, or a name to fill the whole week from a template." }) : null,
         h("section", { class: "co-sec" }, h("div", { class: "co-sec-h" }, h("h3", { text: "My upcoming shifts" }), h("small", { text: "Next 14 days" })),
           upcomingMine.length ? h("div", { class: "co-myshifts" }, ...upcomingMine.map((s, i) => { const t = s.template ? tplMap[s.template] : null; return h("div", { class: "co-myshift glass" + (s.date === T() ? " today" : ""), style: { "--c": t?.color || PALETTE[0], animationDelay: i * 40 + "ms" } },
-            h("b", { text: s.date === T() ? "Today" : new Date(s.date + "T00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) }), h("span", { text: `${s.start}–${s.finish}` }), h("small", { text: t?.name || s.note || "Custom" })); }))
+            h("b", { text: s.date === T() ? "Today" : new Date(s.date + "T00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) }), h("span", { text: span2(s.start, s.finish) }), h("small", { text: t?.name || s.note || "Custom" })); }))
             : h("div", { class: "co-note", text: "No shifts planned for you in the next two weeks." })));
     }
 
@@ -1018,7 +1034,7 @@
       ta.oninput = () => { saved.textContent = "Editing…"; clearTimeout(timer); timer = setTimeout(save, 2500); };
       ta.onblur = save; S.flush = save;
       // AI summary (js/ai.js) from agenda + minutes + decisions, added to the minutes
-      const aiSum = write && Apps.AI?.available() ? Apps.AI.button("Summarise meeting", () => Apps.AI.compose({ title: "Meeting summary", task: "summarize_meeting",
+      const aiSum = write && Apps.AI?.available("meetings") ? Apps.AI.button("Summarise meeting", () => Apps.AI.compose({ title: "Meeting summary", task: "summarize_meeting",
         input: [ag.length ? "Agenda:\n" + ag.map(a => "- " + a.text + (a.done ? " (done)" : "")).join("\n") : "", ta.value.trim() ? "Minutes:\n" + ta.value.trim() : "", decs.length ? "Decisions:\n" + decs.map(d => "- " + d.text).join("\n") : ""].filter(Boolean).join("\n\n"),
         context: `${m.title || "Meeting"} · ${m.date || ""}`, emptyHint: "Add an agenda, minutes or decisions first.", insertLabel: "Add to minutes",
         onInsert: v => { save(); const cur = String(Data.get("meetings", m.id)?.minutes || "").trimEnd(), next = (cur ? cur + "\n\n" : "") + v;
@@ -1033,7 +1049,7 @@
       const keep = {}; body.querySelectorAll("[data-keep]").forEach(el => { keep[el.dataset.keep] = [el.scrollLeft, el.scrollTop]; });
       paintTabs();
       let view;
-      try { view = VIEWS[tab](); } catch (e) { console.error(e); view = Apps.empty("⚠️", "Something went wrong: " + e.message); }
+      try { view = !tabOn(tab) ? Apps.empty("🔌", (TABS.find(([k]) => k === tab)?.[1] || "This tab") + " is switched off in Settings → Tools.", h("button", { class: "btn", text: "Go to employees", onclick: () => setTab("people") })) : VIEWS[tab](); } catch (e) { console.error(e); view = Apps.empty("⚠️", "Something went wrong: " + e.message); }
       if (anim) view.classList.add("co-enter");
       body.replaceChildren(view);
       body.querySelectorAll("[data-keep]").forEach(el => { const k = keep[el.dataset.keep]; if (k) { el.scrollLeft = k[0]; el.scrollTop = k[1]; } });

@@ -97,7 +97,12 @@
     key = norm(key);
     const T = key ? level(key) : 4, self = !!key && key === me;
     switch (action) {
-      case "invite": return L === 0 || L === 2 || (L === 1 && !!w.ownerEmail); // admins need the owner's email known (the rules use it to keep the owner in)
+      case "invite": {
+        // Settings → Employees → Who can invite: "everyone" | "managers" (managers and above, default) | "admins"
+        let who = "managers"; try { who = (window.Prefs && Prefs.get("people.invite")) || who; } catch {}
+        if (L === 1) return !!w.ownerEmail; // admins need the owner's email known (the rules use it to keep the owner in)
+        return L === 0 || (L === 2 && who !== "admins") || (L >= 3 && who === "everyone" && L !== 4);
+      }
       case "remove": return !!key && !self && T !== 0 && (L === 0 || (L === 1 && T >= 2 && !!w.ownerEmail));
       case "setLevel": return !!key && !self && T !== 0 && (L === 0 || (L === 1 && T >= 2));
       case "reassign": return !!key && !self && T !== 0 && (L === 0 || (L === 1 && T >= 2));
@@ -147,7 +152,7 @@
     return !a || !shared() || isAdmin() || a.some(x => can(x, "view"));
   }
   function areas() {
-    const names = [...new Set([...Object.keys(Apps.reg), ...Object.keys(KNOWN)])].filter(n => n !== "home");
+    const names = [...new Set([...Object.keys(Apps.reg), ...Object.keys(KNOWN)])].filter(n => n !== "home" && n !== "settings"); // the Settings page is listed once, as "Workspace settings"
     return [...names.map(n => ({ key: n, title: Apps.reg[n]?.title || KNOWN[n]?.[0] || n, icon: Apps.reg[n]?.icon || KNOWN[n]?.[1] || "🧩" })), SETTINGS];
   }
   const canManageMembers = () => canManage(null, "invite");
@@ -174,7 +179,7 @@
     if (switching) return;
     // the open app became forbidden (or allowed again): render the route afresh
     const cur = Apps.current?.(), denied = !!document.querySelector("#view .acc-denied");
-    if (cur && cur !== "home" && Apps.reg[cur] && denied === can(cur, "view")) dispatchEvent(new HashChangeEvent("hashchange"));
+    if (cur && cur !== "home" && cur !== "settings" && Apps.reg[cur] && denied === can(cur, "view")) dispatchEvent(new HashChangeEvent("hashchange"));
   });
 
   /* ---------- small pieces ---------- */

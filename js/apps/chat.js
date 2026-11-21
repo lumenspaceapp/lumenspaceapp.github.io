@@ -73,7 +73,12 @@
     const a = adminsOf(c);
     return !a.length || a.includes(key || meKey()); // nobody owns it (e.g. #general): anyone can manage it
   }
-  const canPost = id => canSee(id) && (kindOf(id) !== "broadcast" || isAdmin(id));
+  // Settings → Communications: who may post in #general ("all" | "admins" = owner + admins | "owner")
+  const generalRule = () => (window.Prefs ? Prefs.get("comms.generalPost") : "all") || "all";
+  const generalOk = () => { const r = generalRule(); return r === "owner" ? (Apps.role ? Apps.role() === "owner" : true) : r === "admins" ? (Apps.isAdmin?.() ?? true) : true; };
+  const canPost = id => canSee(id) && (kindOf(id) !== "broadcast" || isAdmin(id)) && (id !== "general" || generalOk());
+  const callsOn = () => !window.Prefs || Prefs.tool("chat", "calls");
+  const previewsOn = () => !window.Prefs || Prefs.get("comms.linkPreviews") !== false;
   const canPin = id => isDM(id) || isAdmin(id);
   function membersOf(id) {
     if (isDM(id)) return dmPeople(id);
@@ -115,12 +120,33 @@
     const n = keys.map(k => firstName(person(k).name));
     return n.length <= 3 ? n.join(", ").replace(/, ([^,]*)$/, " and $1") : n.slice(0, 2).join(", ") + ` and ${n.length - 2} others`;
   };
-  const hm = t => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  // times follow Settings → Region (time zone, 24-hour clock) through Apps.fmtTime when it exists
+  const hm = t => {
+    try { const r = Apps.fmtTime?.(t); if (r && !/invalid|nan/i.test(r)) return r; } catch {}
+    return new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  };
   function shortWhen(t) {
     const d = new Date(t), now = new Date();
     if (d.toDateString() === now.toDateString()) return hm(t);
     if (now - d < 6 * 864e5) return d.toLocaleDateString(undefined, { weekday: "short" });
-    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    return Apps.fmtDate(t);
+  }
+  const fullWhen = t => { try { const r = Apps.fmtDateTime?.(t); if (r && !/invalid|nan/i.test(r)) return r; } catch {} return new Date(t).toLocaleString(); };
+  /* link preview card (Settings → Communications → link previews): host and a title guessed from the URL only (no fetch), YouTube thumbnail */
+  function linkCard(text) {
+    const raw = (String(text || "").match(/https?:\/\/[^\s<]*[^\s<.,!?;:)'"]/) || [])[0];
+    if (!raw) return null;
+    let u; try { u = new URL(raw); } catch { return null; }
+    const host = u.hostname.replace(/^www\./, "");
+    const yt = /(^|\.)youtube\.com$/.test(u.hostname) ? (u.searchParams.get("v") || (u.pathname.match(/^\/(?:shorts|embed|live)\/([\w-]{11})/) || [])[1]) : u.hostname === "youtu.be" ? u.pathname.slice(1, 12) : "";
+    const id = /^[\w-]{11}$/.test(yt || "") ? yt : "";
+    let seg = u.pathname.split("/").filter(Boolean).pop() || "";
+    try { seg = decodeURIComponent(seg); } catch {}
+    seg = seg.replace(/\.(html?|php|aspx?)$/i, "").replace(/[-_+]+/g, " ").trim();
+    const title = id ? "YouTube video" : seg && !/^\d+$/.test(seg) && seg.length > 2 ? seg.charAt(0).toUpperCase() + seg.slice(1, 90) : host;
+    return h("a", { class: "cx-link-card" + (id ? " yt" : ""), href: u.href, target: "_blank", rel: "noopener noreferrer", onclick: e => e.stopPropagation() },
+      id ? h("span", { class: "cx-link-img" }, h("img", { src: `https://img.youtube.com/vi/${id}/mqdefault.jpg`, alt: "", loading: "lazy", referrerpolicy: "no-referrer" }), h("i", { text: "▶" })) : null,
+      h("span", { class: "cx-link-t" }, h("b", { text: title }), h("small", { text: host })));
   }
   function dayLabel(t) {
     const d = new Date(t), now = new Date(), y = new Date(now); y.setDate(now.getDate() - 1);
@@ -315,9 +341,9 @@
           vis ? chatAvatar(id, 40) : h("span", { class: "cx-chav", style: { width: "40px", height: "40px" }, html: svg(IC.lock) }),
           h("span", { class: "cx-head-t" }, h("b", { text: name }), h("span", { class: "app-sub" }, sub))),
         extra,
-        vis && Apps.AI?.available() ? h("button", { class: "icon-btn ai-chat-btn", title: "AI: summarise or suggest replies", text: "✨", onclick: e => UI.menu(e.currentTarget, [
+        vis && Apps.AI?.available("chat") ? h("button", { class: "icon-btn ai-chat-btn", title: "AI: summarise or suggest replies", text: "✨", onclick: e => UI.menu(e.currentTarget, [
           { label: "Summarise", iconHtml: "📝", onClick: aiSummary }, canPost(id) ? { label: "Suggest replies", iconHtml: "💡", onClick: aiReplies } : null], { align: "end" }) }) : null,
-        vis && canPost(id) ? h("button", { class: "btn cx-call", title: "Start a video call", onclick: call }, h("span", { html: svg(IC.video) }), h("span", { class: "cx-call-t", text: "Video call" })) : null,
+        vis && canPost(id) && callsOn() ? h("button", { class: "btn cx-call", title: "Start a video call", onclick: call }, h("span", { html: svg(IC.video) }), h("span", { class: "cx-call-t", text: "Video call" })) : null,
         vis ? h("button", { class: "icon-btn", title: "Chat info", html: svg(IC.info), onclick: openInfo }) : null);
     }
     // AI helpers (js/ai.js): summary of the last ~100 messages, and reply ideas for the last message from someone else
@@ -352,6 +378,7 @@
       const vis = canSee(active), can = vis && canPost(active);
       composer.style.display = can ? "" : "none";
       readonly.style.display = vis && !can ? "" : "none";
+      readonly.lastChild.textContent = active === "general" && kindOf(active) !== "broadcast" && generalRule() === "owner" ? "Only the workspace owner can post here" : "Only admins can post here";
       input.placeholder = isPhone() ? "Message…" : `Message ${titleOf(active)}`;
     }
 
@@ -380,7 +407,7 @@
         ...other.map(a => Apps.fileChip(a)));
     }
     function metaEl(m) {
-      return h("span", { class: "cx-meta", title: new Date(m.at).toLocaleString() },
+      return h("span", { class: "cx-meta", title: fullWhen(m.at) },
         pinnedIds.has(m.id) ? h("span", { class: "cx-meta-pin", html: svg(IC.pin) }) : null,
         m.edited && !m.deleted ? "edited · " : "", hm(m.at));
     }
@@ -401,6 +428,7 @@
         if (m.text && m.kind !== "call") {
           const t = h("div", { class: "msg-t" + (!(m.files || []).length && EMOJI_ONLY.test(m.text.trim()) ? " cx-emoji" : ""), html: richText(m.text) });
           t.append(metaEl(m)); bub.append(t);
+          const card = previewsOn() ? linkCard(m.text) : null; if (card) bub.append(card);
         } else bub.append(h("div", { class: "cx-meta-row" }, metaEl(m)));
       }
       const reacts = Object.entries(m.reactions || {}).filter(([, who]) => (who || []).length);
@@ -916,7 +944,7 @@
     draw();
     peopleSig = peopleSigOf();
     typSig = typingSig();
-    const offs = [Data.on("chat", schedule), Data.on("channels", schedule), Data.on("people", onPeople)];
+    const offs = [Data.on("chat", schedule), Data.on("channels", schedule), Data.on("people", onPeople), window.Prefs ? Prefs.on(schedule) : () => {}];
     ready = true;
     timers.push(setInterval(() => { pc.clear(); paintTyping(); const ts = typingSig(); if (ts !== typSig) { typSig = ts; drawSide(); } }, 2000));
     const onVis = () => { if (document.visibilityState === "visible") markSeen(); };

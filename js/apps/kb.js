@@ -509,7 +509,7 @@
       exec("insertHTML", "<code>" + esc(t) + "</code>&#8203;"); change();
     }
     function improve() {
-      if (!Apps.AI?.available()) return;
+      if (!Apps.AI?.available("kb")) return;
       restore();
       const s = sel(), text = s.toString().trim(), keep = s.rangeCount ? s.getRangeAt(0).cloneRange() : null;
       const whole = !text, input = text || htmlText(serialize(doc)).slice(0, 6000);
@@ -627,7 +627,7 @@
       fb("bold", "<b>B</b>", "Bold (Ctrl+B)"), fb("italic", "<i>I</i>", "Italic (Ctrl+I)"), fb("underline", "<u>U</u>", "Underline (Ctrl+U)"), fb("strikeThrough", "<s>S</s>", "Strikethrough"),
       fb("inlineCode", "&lt;/&gt;", "Inline code"), fb("link", icon("link"), "Link (Ctrl+K)"), h("span", { class: "kb-fb-sep" }),
       fb("h1", "H1", "Heading 1"), fb("h2", "H2", "Heading 2"), fb("h3", "H3", "Heading 3"), fb("quote", "❝", "Quote"),
-      Apps.AI?.available() ? fb("improve", "✨", "Improve writing", "ai") : null);
+      Apps.AI?.available("kb") ? fb("improve", "✨", "Improve writing", "ai") : null);
     const tbl = (label, title, fn) => h("button", { type: "button", class: "kb-fb", title, text: label, onmousedown: e => e.preventDefault(), onclick: () => { fn(); change(); requestAnimationFrame(onSel); } });
     function cellInfo() { const c = selNode()?.closest("td, th"); if (!c) return null; const tr = c.parentElement, table = c.closest("table"); return { c, tr, table, i: [...tr.children].indexOf(c) }; }
     const tableBar = h("div", { class: "kb-fmt kb-tblbar glass-strong" },
@@ -801,7 +801,7 @@
       tb("bold", "<b>B</b>", "Bold"), tb("italic", "<i>I</i>", "Italic"), tb("underline", "<u>U</u>", "Underline"), h("span", { class: "kb-tb-sep" }),
       tb("h1", "H1", "Heading 1"), tb("h2", "H2", "Heading 2"), tb("ul", "•≡", "Bulleted list"), tb("ol", "1≡", "Numbered list"), tb("check", "☑", "Checklist"), tb("link", icon("link"), "Link"),
       tb("image", icon("image"), "Image"), tb("table", icon("table"), "Table"), tb("emoji", icon("smile"), "Emoji"),
-      Apps.AI?.available() ? h("button", { type: "button", class: "kb-tb kb-ai", title: "Improve the selected text, or the whole article", text: "✨ Improve writing", onmousedown: e => e.preventDefault(), onclick: () => run("improve") }) : null);
+      Apps.AI?.available("kb") ? h("button", { type: "button", class: "kb-tb kb-ai", title: "Improve the selected text, or the whole article", text: "✨ Improve writing", onmousedown: e => e.preventDefault(), onclick: () => run("improve") }) : null);
 
     /* --- banners: someone else editing / remote changes --- */
     const banner = h("div", { class: "kb-banner-slot" });
@@ -1160,7 +1160,7 @@
       ed?.flush();
       const a = Data.get(AR, id); if (!a) return;
       const vers = [...(a.versions || [])].reverse(), view = h("div", { class: "kb-ver-view" }), list = h("div", { class: "kb-ver-list" });
-      const when = t => new Date(t).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+      const when = t => Apps.fmtDateTime?.(t) ?? new Date(t).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); // Settings → Region
       const show = (v, i, rowEl) => {
         list.querySelectorAll(".kb-ver-row").forEach(r => r.classList.toggle("on", r === rowEl));
         const d = h("div", { class: "kb-doc kb-ver-doc", html: sanitize(v.body || "") }); hydrate(d, "preview");
@@ -1397,7 +1397,7 @@
           h("h1", { class: "kb-art-title", text: a.title || "Untitled" }),
           h("div", { class: "kb-art-acts" },
             h("button", { class: "icon-btn kb-star" + (isFav(a) ? " on" : ""), type: "button", title: isFav(a) ? "Remove from favorites" : "Add to favorites", html: icon("star"), onclick: () => toggleFav(a) }),
-            Apps.AI?.available() && nWords > 30 ? h("button", { class: "btn kb-ai-btn", type: "button", text: "✨ Summarise", onclick: () => summarise(a) }) : null,
+            Apps.AI?.available("kb") && nWords > 30 ? h("button", { class: "btn kb-ai-btn", type: "button", text: "✨ Summarise", onclick: () => summarise(a) }) : null,
             editable ? h("button", { class: "btn primary", type: "button", html: I.edit + "<span>Edit</span>", onclick: () => go("edit", a.id) }) : null,
             h("button", { class: "icon-btn", type: "button", title: "More", html: icon("dots"), onclick: e => artMenu(e.currentTarget, a, null) }))),
         h("div", { class: "kb-meta" }, Apps.avatar(author, 22), h("span", { text: author.name }), h("span", { class: "kb-dot" }),

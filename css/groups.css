@@ -311,3 +311,6 @@ button.gr-epic:not(:disabled):hover { filter: brightness(1.08); }
   .app-groups .gr-feed .gr-pend { margin-left: 0; }
   .gr-legend b { margin-left: 0; width: 100%; }
 }
+
+/* weekends from Settings → Business hours */
+.gr-cal-grid .cal-day.we:not(.other) { background: color-mix(in srgb, var(--hover) 55%, transparent); }

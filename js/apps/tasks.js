@@ -13,6 +13,13 @@
   const meKey = () => Data.me().key;
   const ls = k => { try { return localStorage.getItem(k); } catch { return null; } };
   const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+  // workspace settings (js/prefs.js): sub-features in Settings → Tools, business hours, region; defaults = today's behaviour
+  const toolOn = f => !window.Prefs || Prefs.tool("tasks", f);
+  const hours = () => (window.Prefs ? Prefs.get("hours") : null) || { weekend: [0, 6], weekStart: 1 };
+  const weekendSet = () => new Set(Array.isArray(hours().weekend) ? hours().weekend : [0, 6]);
+  const isWeekend = d => weekendSet().has(new Date(d + "T00:00").getDay());
+  const weekStartOf = d => { const ws = +(hours().weekStart ?? 1) || 0; return Apps.addDays(d, -((new Date(d + "T00:00").getDay() - ws + 7) % 7)); };
+  const offNote = what => Apps.empty("🔌", what + " is switched off in Settings → Tools.");
 
   /* ---------- who sees what ---------- */
   // templates and deleted tasks never show up in normal lists
@@ -39,7 +46,7 @@
   const fmtDur = sec => { const m = Math.floor((sec || 0) / 60), hh = Math.floor(m / 60); return hh ? `${hh}h${m % 60 ? " " + (m % 60) + "m" : ""}` : `${m}m`; };
   const clock = sec => [Math.floor(sec / 3600), Math.floor(sec / 60) % 60, Math.floor(sec) % 60].map(n => String(n).padStart(2, "0")).join(":");
   const spent = t => (t.timeSpent || 0) + (t.tracking ? Math.max(0, (Date.now() - (t.tracking.since || Date.now())) / 1000) : 0);
-  const fmtWhen = ms => new Date(ms).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  const fmtWhen = ms => Apps.fmtDateTime?.(ms) ?? new Date(ms).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
   const stColor = t => `var(--c-${st(t.status)[2]})`;
   const firstName = k => (Data.person(k).name || "").split(" ")[0];
   const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -183,13 +190,13 @@
       { key: "participants", label: "Participants", type: "people", half: true, placeholder: "Add participants…" },
       { key: "observers", label: "Observers", type: "people", half: true, placeholder: "Add observers…" },
       { key: "start", label: "Start date", type: "date", half: true },
-      { key: "estH", label: "Time estimate, hours", type: "number", half: true, placeholder: "0" },
+      toolOn("timetracking") ? { key: "estH", label: "Time estimate, hours", type: "number", half: true, placeholder: "0" } : null,
       { key: "priority", label: "Priority", type: "select", options: [["normal", "Normal"], ["high", "🔥 High"], ["low", "⬇️ Low"]], half: true },
       { key: "project", label: "Project", type: "select", options: [["", "No project"], ...projects.map(p => [p.id, p.name])], half: true },
       { key: "repeat", label: "Repeat", type: "select", options: REPEAT, half: true },
       { key: "tags", label: "Tags", placeholder: "design, urgent", half: true },
       { key: "needsApproval", label: "Check the result when it's done", type: "checkbox" },
-    ], { assignee: me.key, priority: "normal", status: "todo", ...preset, repeat: rep.freq || "", tags: parseTags(preset.tags).join(", "),
+    ].filter(Boolean), { assignee: me.key, priority: "normal", status: "todo", ...preset, repeat: rep.freq || "", tags: parseTags(preset.tags).join(", "),
       estH: preset.estimate ? Math.round(preset.estimate / 6) / 10 : "" }, { ok: "Create task", width: 580 });
     if (!v) return;
     const doc = {
@@ -197,7 +204,7 @@
       deadline: v.deadline || "", start: v.start || "", project: v.project || "", parentId: v.parentId || "",
       participants: (v.participants || []).filter(k => k !== v.assignee), observers: v.observers || [], tags: parseTags(v.tags),
       needsApproval: !!v.needsApproval, repeat: v.repeat ? { freq: v.repeat, until: rep.until || "" } : null,
-      estimate: Math.round((+v.estH || 0) * 60), timeSpent: 0, checklist: (v.checklist || []).map(c => ({ id: c.id || Data.uid(), t: c.t, done: false })),
+      estimate: v.estH != null ? Math.round((+v.estH || 0) * 60) : (preset.estimate || 0), timeSpent: 0, checklist: (v.checklist || []).map(c => ({ id: c.id || Data.uid(), t: c.t, done: false })),
       comments: [], files: [], related: [],
       // Scrum fields passed in by Workgroups (sprint, epic, story points) are kept
       ...(v.sprint ? { sprint: v.sprint } : {}), ...(v.epic ? { epic: v.epic } : {}), ...(+v.points ? { points: +v.points } : {}), ...(typeof v.rank === "number" ? { rank: v.rank } : {}),
@@ -312,17 +319,17 @@
       const t = Data.get("tasks", id); if (!t) return;
       UI.menu(menuBtn, [
         { label: "Copy link", icon: "link", onClick: () => { navigator.clipboard?.writeText(location.href.split("#")[0] + LINK(id)); UI.toast("🔗 Link copied"); } },
-        { label: "Save as template", icon: "copy", onClick: () => saveTemplate(t) },
+        toolOn("templates") ? { label: "Save as template", icon: "copy", onClick: () => saveTemplate(t) } : null,
         { label: "Add subtask", icon: "plus", onClick: () => newTask({ parentId: id, project: t.project || "", assignee: t.assignee || meKey() }) },
         { sep: true },
         t.deleted ? { label: "Restore", icon: "restore", onClick: () => restore(t) }
           : { label: "Move to recycle bin", icon: "trash", danger: true, onClick: () => { trash(t); p.close(); } },
-      ], { align: "end" });
+      ].filter(Boolean), { align: "end" });
     };
     let draft = "", pending = [];
     const notified = new Set();
-    const off = Data.on("tasks", UI.liveDraw(body, draw));
-    p.onClose = off;
+    const off = Data.on("tasks", UI.liveDraw(body, draw)), offPrefs = window.Prefs ? Prefs.on(UI.liveDraw(body, draw)) : () => {};
+    p.onClose = () => { off(); offPrefs(); };
 
     function draw() {
       const t = Data.get("tasks", id); if (!t || t.kind === "template") return p.close();
@@ -380,7 +387,7 @@
       proj.onchange = () => set({ project: proj.value });
       // Scrum workgroups: story points, sprint and epic
       const grp = t.project && Data.get("projects", t.project), scrumRows = [];
-      if (grp && grp.type === "scrum") {
+      if (grp && grp.type === "scrum" && toolOn("scrum")) {
         const sel = (opts, val, field, num) => { const s = h("select", { class: "chip-in" }, ...opts.map(([k, l]) => h("option", { value: k, selected: String(val) === String(k) }, l))); s.onchange = () => set({ [field]: num ? +s.value : s.value }); return s; };
         scrumRows.push(
           h("span", { text: "Story points" }), sel([0, 1, 2, 3, 5, 8, 13].map(n => [n, n ? String(n) : "–"]), +t.points || 0, "points", true),
@@ -413,7 +420,7 @@
         h("span", { text: "Observers" }), peopleBtn("observers", "an observer of"),
         h("span", { text: "Start date" }), h("div", { class: "tk-v" }, dateIn(t.start, v => set({ start: v }))),
         h("span", { text: "Deadline" }), h("span", { class: "td-dl " + due(t) }, dateIn(t.deadline, v => set({ deadline: v })), due(t) === "overdue" ? h("b", { text: " Overdue" }) : null),
-        h("span", { text: "Estimate" }), h("div", { class: "tk-v" }, estH, h("small", { text: "h" }), estM, h("small", { text: "min" })),
+        ...(toolOn("timetracking") ? [h("span", { text: "Estimate" }), h("div", { class: "tk-v" }, estH, h("small", { text: "h" }), estM, h("small", { text: "min" }))] : []),
         h("span", { text: "Priority" }), pri,
         h("span", { text: "Project" }), proj, ...scrumRows,
         h("span", { text: "Repeat" }), h("div", { class: "tk-v" }, rep, t.repeat && t.repeat.freq ? h("small", { text: "until" }) : null,
@@ -444,7 +451,7 @@
       newItem.onkeydown = e => { if (e.key === "Enter" && newItem.value.trim()) { set({ checklist: [...cl, { id: Data.uid(), t: newItem.value.trim(), done: false }] }); draw(); setTimeout(() => body.querySelector(".cl-new")?.focus(), 30); } };
 
       // AI helpers (js/ai.js): only when AI is available
-      const ai = Apps.AI?.available(), aiTitle = () => title.textContent.trim() || t.title || "";
+      const ai = Apps.AI?.available("tasks"), aiTitle = () => title.textContent.trim() || t.title || "";
       const aiDesc = ai ? Apps.AI.button("Write description", () => Apps.AI.compose({ title: "Task description", task: "task_description", input: aiTitle(),
         context: desc.value.trim() ? "Current description:\n" + desc.value : "", insertLabel: desc.value.trim() ? "Replace" : "Use this", onInsert: v => set({ desc: v }) })) : null;
       const aiList = ai ? Apps.AI.button("Suggest checklist", () => Apps.AI.compose({ title: "Suggested checklist", task: "task_checklist", input: aiTitle(),
@@ -507,7 +514,7 @@
         title,
         h("div", { class: "td-meta" }, "Created by ", Apps.avatar(Data.person(t.by), 18), " ", Data.person(t.by).name, " · ", UI.timeAgo(t.at || Date.now()),
           t.status === "done" && t.completedAt ? " · done " + UI.timeAgo(t.completedAt) : ""),
-        appr, statusSel, apprHint, timeBox, grid,
+        appr, statusSel, apprHint, toolOn("timetracking") ? timeBox : null, grid,
         h("div", { class: "td-sec tk-sec-row" }, h("span", { text: "Description" }), aiDesc), desc,
         h("div", { class: "td-sec tk-sec-row" }, h("span", { text: `Files${files.length ? ` (${files.length})` : ""}` }), attachBtn), filesEl,
         h("div", { class: "td-sec tk-sec-row" }, h("span", { text: `Checklist ${cl.length ? `· ${doneN}/${cl.length}` : ""}` }), aiList),
@@ -552,13 +559,14 @@
       ...[["all", "All roles"], ["doing", "Doing"], ["by", "Set by me"], ["following", "Following"]].map(([k, l]) => h("option", { value: k, selected: role === k }, l)));
     const counters = h("div", { class: "counters" });
     const eff = h("span", { class: "tk-eff" });
+    const projBtn = h("button", { class: "btn", text: "+ Project", onclick: newProject });
+    const tplBtn = h("button", { class: "btn", text: "📋 From template", onclick: e => templateMenu(e.currentTarget, project ? { project } : {}) });
+    const tabsEl = Apps.tabs([["mine", "My tasks"], ["created", "Assigned by me"], ["all", "All tasks"], ["projects", "Projects"], ["bin", "🗑 Recycle bin"]], tab, k => { tab = k; quick = ""; resetScroll = true; draw(); });
     onTagClick = tg => { tag = tag.toLowerCase() === tg.toLowerCase() ? "" : tg; draw(); };
     root.append(
-      Apps.header("Tasks & Projects", "✅", "Plan, assign and track work", eff,
-        h("button", { class: "btn", text: "+ Project", onclick: newProject }),
-        h("button", { class: "btn", text: "📋 From template", onclick: e => templateMenu(e.currentTarget, project ? { project } : {}) }),
+      Apps.header("Tasks & Projects", "✅", "Plan, assign and track work", eff, projBtn, tplBtn,
         h("button", { class: "btn primary", text: "+ New task", onclick: () => newTask({ project }) })),
-      Apps.tabs([["mine", "My tasks"], ["created", "Assigned by me"], ["all", "All tasks"], ["projects", "Projects"], ["bin", "🗑 Recycle bin"]], tab, k => { tab = k; quick = ""; resetScroll = true; draw(); }),
+      tabsEl,
       h("div", { class: "app-toolbar" }, search, projSel, tagSel, roleSel, h("span", { class: "grow" }), viewSeg), counters, body);
 
     /* filters */
@@ -574,6 +582,11 @@
 
     function draw() {
       SUBS = subCounts();
+      // Settings → Tools: hide switched-off parts
+      const onProj = toolOn("projects"), onGantt = toolOn("gantt"), onEff = toolOn("efficiency");
+      projBtn.hidden = !onProj; tplBtn.hidden = !toolOn("templates"); eff.hidden = !onEff;
+      const projTab = tabsEl.querySelectorAll("button")[3]; if (projTab) projTab.hidden = !onProj;
+      viewSeg.querySelectorAll("button")[VIEWS.findIndex(v => v[0] === "gantt")].hidden = !onGantt;
       const projects = visProjects(project), tags = allTags();
       projSel.replaceChildren(h("option", { value: "" }, "All projects"), ...projects.map(p => h("option", { value: p.id, selected: project === p.id }, p.name)));
       if (tag && !tags.some(x => x.toLowerCase() === tag.toLowerCase())) tags.push(tag);
@@ -604,10 +617,12 @@
       // body (keep the horizontal scroll of the Gantt across live updates)
       const sc = body.querySelector(".tk-scroll"), keepX = sc && !resetScroll ? sc.scrollLeft : null;
       let el;
-      if (tab === "projects") el = projectsView();
+      if (tab === "projects" && !onProj) el = offNote("Projects");
+      else if (tab === "projects") el = projectsView();
       else if (tab === "bin") el = binView();
       else if (view === "planner") el = planner();
       else if (view === "calendar") el = calendarView(filtered());
+      else if (view === "gantt" && !onGantt) el = offNote("The Gantt view");
       else if (view === "gantt") el = gantt(filtered());
       else {
         const list = filtered();
@@ -677,10 +692,13 @@
 
     /* planner: my open tasks by when they're due; dropping a card sets its deadline */
     function planner() {
-      const today = T(), mon = mondayOf(today), fri = Apps.addDays(mon, 4), sun = Apps.addDays(mon, 6), nextSun = Apps.addDays(sun, 7);
-      const weekDrop = fri > today ? fri : sun > today ? sun : today;
-      const bucket = t => !t.deadline ? "none" : t.deadline < today ? "overdue" : t.deadline === today ? "today" : t.deadline <= sun ? "week" : t.deadline <= nextSun ? "next" : "later";
-      const cols = [["overdue", "Overdue", "red", null, ""], ["today", "Today", "orange", today, Apps.fmtDate(today)], ["week", "This week", "blue", weekDrop, "until " + Apps.fmtDate(sun)],
+      // the week follows Settings → Business hours: it starts on weekStart and "This week" ends on the last working day
+      const today = T(), mon = weekStartOf(today), sun = Apps.addDays(mon, 6);
+      let fri = sun; while (fri > mon && isWeekend(fri)) fri = Apps.addDays(fri, -1);
+      const nextSun = Apps.addDays(fri, 7);
+      const weekDrop = fri > today ? fri : today;
+      const bucket = t => !t.deadline ? "none" : t.deadline < today ? "overdue" : t.deadline === today ? "today" : t.deadline <= fri ? "week" : t.deadline <= nextSun ? "next" : "later";
+      const cols = [["overdue", "Overdue", "red", null, ""], ["today", "Today", "orange", today, Apps.fmtDate(today)], ["week", "This week", "blue", weekDrop, "until " + Apps.fmtDate(fri)],
         ["next", "Next week", "purple", Apps.addDays(fri, 7), Apps.fmtDate(Apps.addDays(mon, 7)) + " – " + Apps.fmtDate(nextSun)], ["later", "Later", "green", Apps.addDays(nextSun, 1), ""], ["none", "No deadline", "gray", "", ""]];
       const mine = liveTasks().filter(t => isMine(t) && t.status !== "done" && matches(t)).sort(sortT);
       return h("div", null, h("div", { class: "tk-hint tk-view-hint", text: "Your open tasks, planned by deadline. Drag a card to another column to replan it." }),
@@ -705,7 +723,7 @@
       return c;
     };
     function calendarView(list) {
-      const [y, m] = calMonth.split("-").map(Number), first = calMonth + "-01", start = mondayOf(first);
+      const [y, m] = calMonth.split("-").map(Number), first = calMonth + "-01", start = weekStartOf(first);
       const dim = new Date(y, m, 0).getDate(), weeks = Math.ceil((daysBetween(start, first) + dim) / 7);
       const byDay = {}; list.forEach(t => { if (t.deadline) (byDay[t.deadline] ||= []).push(t); });
       const shift = n => { calMonth = Apps.iso(new Date(y, m - 1 + n, 1)).slice(0, 7); draw(); };
@@ -715,11 +733,11 @@
         h("button", { class: "icon-btn", title: "Next month", text: "›", onclick: () => shift(1) }),
         h("b", { class: "tk-cal-label", text: new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" }) }),
         h("span", { class: "grow" }), h("small", { class: "tk-hint", text: "Drag a task to another day to reschedule · click a day to add a task" }));
-      const wd = [0, 1, 2, 3, 4, 5, 6].map(i => new Date(2024, 0, 1 + i).toLocaleDateString(undefined, { weekday: "short" }));
+      const wd = [0, 1, 2, 3, 4, 5, 6].map(i => new Date(Apps.addDays(start, i) + "T00:00").toLocaleDateString(undefined, { weekday: "short" }));
       const grid = h("div", { class: "cal-grid tk-cal", dataset: { m: calMonth } }, ...wd.map(d => h("div", { class: "cal-wd", text: d })));
       for (let i = 0; i < weeks * 7; i++) {
         const date = Apps.addDays(start, i), items = (byDay[date] || []).sort(sortT);
-        const cell = h("div", { class: "cal-day tk-day" + (date.slice(0, 7) !== calMonth ? " other" : "") + (date === T() ? " today" : "") + (i % 7 > 4 ? " we" : ""), title: "Add a task due " + Apps.fmtDate(date),
+        const cell = h("div", { class: "cal-day tk-day" + (date.slice(0, 7) !== calMonth ? " other" : "") + (date === T() ? " today" : "") + (isWeekend(date) ? " we" : ""), title: "Add a task due " + Apps.fmtDate(date),
           onclick: e => { if (!e.target.closest(".cal-chip,.cal-more")) newTask({ deadline: date, project }); } },
           h("span", { class: "cal-n", text: +date.slice(8) }), ...items.slice(0, 3).map(calChip),
           items.length > 3 ? h("button", { class: "cal-more", text: `+${items.length - 3} more`, onclick: e => { e.stopPropagation(); UI.popover(e.currentTarget, h("div", { class: "tk-daypop" }, h("div", { class: "menu-sec", text: Apps.fmtDate(date) }), ...items.map(calChip))); } }) : null);
@@ -738,7 +756,7 @@
       rows.forEach(t => { const s = startOf(t); if (s < min) min = s; if (t.deadline > max) max = t.deadline; });
       const lo = Apps.addDays(today, -180), hi = Apps.addDays(today, 540);
       if (min < lo) min = lo; if (max > hi) max = hi;
-      min = mondayOf(Apps.addDays(min, -3)); max = Apps.addDays(mondayOf(Apps.addDays(max, 7)), 6);
+      min = weekStartOf(Apps.addDays(min, -3)); max = Apps.addDays(weekStartOf(Apps.addDays(max, 7)), 6);
       const days = daysBetween(min, max) + 1, W = days * px, x = d => daysBetween(min, d) * px;
 
       // header: months + days (or weeks)
@@ -746,11 +764,11 @@
       for (let i = 0; i < days; i++) { const d = Apps.addDays(min, i); if (i === 0 || d.endsWith("-01")) months.push([i, d]); }
       const mHead = h("div", { class: "g-months" }, ...months.map(([i, d], j) => h("span", { style: { left: i * px + "px", width: ((months[j + 1]?.[0] ?? days) - i) * px + "px" },
         text: new Date(d + "T00:00").toLocaleDateString(undefined, { month: gZoom === "week" ? "short" : "long", year: "numeric" }) })));
-      const uHead = h("div", { class: "g-units" });
+      const uHead = h("div", { class: "g-units" }), weSet = weekendSet();
       if (gZoom === "week") for (let i = 0; i < days; i += 7) { const d = Apps.addDays(min, i); uHead.append(h("span", { class: today >= d && today <= Apps.addDays(d, 6) ? "today" : "", style: { width: 7 * px + "px" }, text: Apps.fmtDate(d) })); }
       else for (let i = 0; i < days; i++) {
         const d = Apps.addDays(min, i), w = new Date(d + "T00:00").getDay();
-        uHead.append(h("span", { class: (w === 0 || w === 6 ? "we" : "") + (d === today ? " today" : ""), style: { width: px + "px" } }, h("small", { text: new Date(d + "T00:00").toLocaleDateString(undefined, { weekday: "narrow" }) }), String(+d.slice(8))));
+        uHead.append(h("span", { class: (weSet.has(w) ? "we" : "") + (d === today ? " today" : ""), style: { width: px + "px" } }, h("small", { text: new Date(d + "T00:00").toLocaleDateString(undefined, { weekday: "narrow" }) }), String(+d.slice(8))));
       }
 
       // one row per task
@@ -782,8 +800,10 @@
 
       const zoomSeg = h("div", { class: "seg" }, ...[["day", "Days"], ["week", "Weeks"]].map(([k, l]) => h("button", { class: gZoom === k ? "on" : "", text: l, onclick: () => { gZoom = k; lsSet("lumen-task-gzoom", k); resetScroll = true; draw(); } })));
       const todayX = x(today);
+      // weekend columns (Settings → Business hours), repeating every 7 days from the first shown day
+      const d0 = new Date(min + "T00:00").getDay(), weBg = "linear-gradient(90deg, " + [0, 1, 2, 3, 4, 5, 6].flatMap(k => { const c = weSet.has((d0 + k) % 7) ? "var(--g-we)" : "transparent"; return [`${c} calc(var(--px) * ${k})`, `${c} calc(var(--px) * ${k + 1})`]; }).join(", ") + ")";
       const scroller = h("div", { class: "tk-scroll gantt glass", dataset: { x: todayX } },
-        h("div", { class: "g-inner", style: { "--px": px + "px", "--gl": (gZoom === "week" ? 7 * px : px) + "px", "--w": W + "px" } },
+        h("div", { class: "g-inner", style: { "--px": px + "px", "--gl": (gZoom === "week" ? 7 * px : px) + "px", "--w": W + "px", "--we-bg": weBg } },
           h("div", { class: "g-row g-head" }, h("div", { class: "g-label", text: "Task" }), h("div", { class: "g-track g-hd" }, mHead, uHead)),
           ...bodyRows,
           !rows.length ? h("div", { class: "g-row" }, h("div", { class: "g-label tk-hint", text: "No tasks with a deadline" }), h("div", { class: "g-track" })) : null,
@@ -872,7 +892,7 @@
       if (v) Data.update("projects", p.id, { name: v.name, desc: v.desc, color: v.color });
     }
 
-    const offs = [Data.on("tasks", draw), Data.on("projects", draw), Data.on("people", draw)];
+    const offs = [Data.on("tasks", draw), Data.on("projects", draw), Data.on("people", draw), window.Prefs ? Prefs.on(draw) : () => {}];
     const dayTick = setInterval(() => { if (!document.querySelector(".tk-body .g-bar.drag")) draw(); }, 5 * 60000); // "today" moves on
     if (arg) setTimeout(() => openTask(arg), 100);
     return () => { offs.forEach(f => f()); clearInterval(dayTick); onTagClick = null; };

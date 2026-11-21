@@ -49,6 +49,34 @@
     setMe(patch) { const k = Data.me().key; return Data.update("people", k, { prefs: merge(Prefs.me(), patch) }); },
     // live updates: run fn whenever workspace settings change
     on(fn) { return window.Data ? Data.on("settings", () => fn(Prefs.ws())) : () => {}; },
+
+    /* ---------- helpers added for the Settings page ---------- */
+    // admins: replace one section with its current values + patch (the private workspace merges only top-level keys, so always send whole sections)
+    setIn(section, patch) { return Prefs.set({ [section]: { ...(Prefs.ws()[section] || {}), ...patch } }); },
+    // wallpapers (css/base.css draws them from html[data-wall] + html[data-wall-kind]); kind: aurora (animated blobs), mesh (still gradient), flat, space
+    WALLPAPERS: [
+      ["aurora", "Aurora", "aurora"], ["sunset", "Sunset", "aurora"], ["ocean", "Ocean", "aurora"], ["forest", "Forest", "aurora"],
+      ["northern", "Northern lights", "aurora"], ["candy", "Candy", "aurora"], ["lavender", "Lavender", "aurora"], ["mint", "Mint", "aurora"],
+      ["ember", "Ember", "aurora"], ["dusk", "Dusk", "aurora"], ["berry", "Berry", "aurora"], ["sand", "Sand", "aurora"], ["sky", "Sky", "aurora"],
+      ["mesh", "Pastel mesh", "mesh"], ["prism", "Prism mesh", "mesh"], ["peach", "Peach mesh", "mesh"],
+      ["space", "Deep space", "space"], ["noise", "Soft noise", "flat"], ["mono", "Mono", "aurora"], ["plain", "Plain", "flat"],
+    ].map(([id, name, kind]) => ({ id, name, kind })),
+    wallKind(id) { return (Prefs.WALLPAPERS.find(w => w.id === id) || Prefs.WALLPAPERS[0]).kind; },
+    // date / time settings as they apply to me: my device override (Store.local.settings.region) first, then the workspace
+    region() {
+      const w = Prefs.ws().region, mine = (window.Store && Store.local.settings.region) || {};
+      const pick = k => mine[k] !== undefined && mine[k] !== "" && mine[k] !== null ? mine[k] : w[k];
+      return { ...w, timezone: pick("timezone"), dateFormat: pick("dateFormat") || "auto", time24: !!pick("time24") };
+    },
+    // is "do not disturb" on right now? (my own schedule, device clock)
+    inDnd(now = new Date()) {
+      const d = Prefs.me().dnd || {}; if (!d.on) return false;
+      const m = s => { const [a, b] = String(s || "0:0").split(":").map(Number); return (a || 0) * 60 + (b || 0); };
+      const t = now.getHours() * 60 + now.getMinutes(), f = m(d.from), e = m(d.to);
+      return f === e ? true : f < e ? t >= f && t < e : t >= f || t < e;
+    },
+    // may an alert of this type use this channel ("card" | "sound" | "desktop")?
+    notifyOn(type, channel) { const n = Prefs.me().notify || {}; return ((n[type] || n.other || {})[channel]) !== false; },
   };
   window.Prefs = Prefs;
 })();

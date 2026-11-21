@@ -8,7 +8,10 @@
    personal → its owner and the people it's shared with, anything else → everyone in the workspace. */
 (function () {
   const { h, esc } = UI;
-  const MAX = 700 * 1024, GB = 1024 ** 3, KEEP = 5, DND = "text/x-lumen-drive";
+  const MAX = 700 * 1024, GB = 1024 ** 3, DND = "text/x-lumen-drive";
+  // workspace settings (js/prefs.js): how many old versions to keep (Settings → Communications) and Tools → Drive → versions
+  const keep = () => { const n = window.Prefs ? +Prefs.get("comms.driveVersions") : NaN; return Number.isFinite(n) ? Math.max(0, Math.min(50, Math.round(n))) : 5; };
+  const versionsOn = () => !window.Prefs || Prefs.tool("drive", "versions");
   const HIDDEN = new Set(["__attachments", "__versions"]);
   const PDFJS = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/";
   const SECTIONS = [["my", "👤", "My Drive"], ["company", "🏢", "Company drive"], ["shared", "🤝", "Shared with me"], ["groups", "👥", "Groups"], ["recent", "🕘", "Recent"], ["starred", "⭐", "Starred"], ["bin", "🗑️", "Recycle bin"]];
@@ -28,7 +31,7 @@
   const ownerOf = x => x.owner || x.by || "";
   const modOf = f => f.modified || f.at || 0;
   const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
-  const fmtWhen = ts => ts ? new Date(ts).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "—";
+  const fmtWhen = ts => ts ? (Apps.fmtDateTime?.(ts) ?? new Date(ts).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })) : "—";
   const EXT = n => ((String(n || "").match(/\.([a-z0-9]{1,6})$/i) || [])[1] || "").toLowerCase();
   const byName = (a, b) => String(a.name || "").localeCompare(String(b.name || ""), undefined, { numeric: true, sensitivity: "base" });
   const companyEdit = () => { try { return Apps.can ? Apps.can("drive", "edit") : true; } catch { return true; } };
@@ -260,7 +263,7 @@
     const me = meKey(), at = modOf(f), by = f.modifiedBy || ownerOf(f);
     const vid = await Data.add("files", { name: f.name, type: f.type, size: f.size || 0, data: f.data, folder: "__versions", of: f.id, at, by });
     const versions = [...(f.versions || []), { id: vid, at, by, size: f.size || 0 }];
-    while (versions.length > KEEP) { const old = versions.shift(); Data.remove("files", old.id); }
+    while (versions.length > keep()) { const old = versions.shift(); Data.remove("files", old.id); }
     await Data.update("files", f.id, { ...nu, versions, modified: Date.now(), modifiedBy: me });
   }
   async function restoreVersion(f, v) {
@@ -270,11 +273,12 @@
     const me = meKey(), at = modOf(f), by = f.modifiedBy || ownerOf(f);
     const vid = await Data.add("files", { name: f.name, type: f.type, size: f.size || 0, data: f.data, folder: "__versions", of: f.id, at, by });
     const versions = [...(f.versions || []).filter(x => x.id !== v.id), { id: vid, at, by, size: f.size || 0 }];
-    while (versions.length > KEEP) { const old = versions.shift(); Data.remove("files", old.id); }
+    while (versions.length > keep()) { const old = versions.shift(); Data.remove("files", old.id); }
     await Data.update("files", f.id, { data: vd.data, type: vd.type, size: vd.size || 0, versions, modified: Date.now(), modifiedBy: me });
     Data.remove("files", v.id);
   }
   async function uploadVersion(f) {
+    if (!versionsOn()) return UI.toast("File versions are switched off in Settings → Tools.");
     const [file] = await Apps.pickFiles(false);
     if (!file) return;
     if (file.size > MAX) return UI.toast(`“${file.name}” is ${size(file.size)}. Files can be up to 700 KB on the free plan.`);
@@ -430,7 +434,7 @@
       const here = new Map((w.fils.get(t.folder) || []).filter(f => f.data && w.live(f, false) && (t.folder || inRoot(w, f, t.scope))).map(f => [String(f.name).toLowerCase(), f]));
       const dupes = entries.filter(e => !e.path && here.has(e.file.name.toLowerCase()));
       let mode = "both";
-      if (dupes.length) { mode = await askDupes(dupes.length); if (!mode) return; }
+      if (dupes.length && versionsOn()) { mode = await askDupes(dupes.length); if (!mode) return; }
       clearTimeout(upHide);
       if (upDone >= upJobs) { upJobs = 0; upDone = 0; upList.replaceChildren(); }
       upJobs += entries.length; upPaint();
@@ -706,7 +710,7 @@
         ed && !groupRoot ? { label: "Rename", icon: "text", onClick: () => rename(x, isF) } : null,
         ed && !groupRoot ? { label: "Move to…", icon: "arrow", onClick: () => moveItems(list) } : null,
         { label: "Copy to…", icon: "copy", onClick: () => copyItems(list) },
-        !isF && ed && x.data ? { label: "Upload new version", icon: "turn", onClick: () => uploadVersion(x) } : null,
+        !isF && ed && x.data && versionsOn() ? { label: "Upload new version", icon: "turn", onClick: () => uploadVersion(x) } : null,
         !isF && !opts.inViewer ? { label: "Details & comments", icon: "page", onClick: () => openEntry(e, "details") } : null,
         groupRoot && G()?.open ? { label: "Open workgroup", iconHtml: esc(groupIcon(w.groupOf.get(x.id))), onClick: () => G().open(w.groupOf.get(x.id).id) } : null,
         { sep: true },
@@ -1179,7 +1183,8 @@
       }
       function drawSide(fx) {
         const nC = (fx.comments || []).length, nV = (fx.versions || []).length;
-        tabsBar.replaceChildren(...[["details", "Details"], ["comments", "Comments" + (nC ? " " + nC : "")], ["versions", "Versions" + (nV ? " " + (nV + 1) : "")]].map(([k, l]) =>
+        if (tab === "versions" && !versionsOn()) tab = "details";
+        tabsBar.replaceChildren(...[["details", "Details"], ["comments", "Comments" + (nC ? " " + nC : "")], versionsOn() ? ["versions", "Versions" + (nV ? " " + (nV + 1) : "")] : null].filter(Boolean).map(([k, l]) =>
           h("button", { class: tab === k ? "on" : "", text: l, onclick: () => { tab = k; lsSet("lumen-drive-vtab", k); const cf = Data.get("files", cur); if (cf) drawSide(cf); if (k === "comments" && !phone()) setTimeout(() => cInput.focus(), 30); } })));
         if (tab === "comments") { if (!content.contains(composer)) content.replaceChildren(cList, composer); drawComments(fx); }
         else content.replaceChildren(tab === "versions" ? versionsEl(fx) : detailsEl(fx));
@@ -1203,7 +1208,7 @@
           row("Modified", fmtWhen(modOf(fx)) + (fx.modifiedBy ? ` by ${Data.person(fx.modifiedBy).name}` : "")),
           row("Location", locEl),
           row("Access", access),
-          row("Versions", fx.data ? h("button", { class: "dv-link", text: plural((fx.versions || []).length + 1, "version"), onclick: () => { tab = "versions"; drawSide(fx); } }) : "—"),
+          !versionsOn() ? null : row("Versions", fx.data ? h("button", { class: "dv-link", text: plural((fx.versions || []).length + 1, "version"), onclick: () => { tab = "versions"; drawSide(fx); } }) : "—"),
           row("Comments", h("button", { class: "dv-link", text: (fx.comments || []).length ? plural(fx.comments.length, "comment") : "Add a comment", onclick: () => { tab = "comments"; drawSide(fx); setTimeout(() => cInput.focus(), 30); } })),
           h("div", { class: "dvw-btns" }, h("button", { class: "btn", text: "🤝 Share", onclick: () => shareDialog(fx, false) }), h("button", { class: "btn", text: "🔗 Copy link", onclick: () => copyText(linkOf(fx.id)) })));
       }
@@ -1219,7 +1224,7 @@
           ed ? h("button", { class: "btn primary dvw-wide", text: "⬆ Upload new version", onclick: () => uploadVersion(fx) }) : null,
           vRow({ at: modOf(fx), by: fx.modifiedBy || ownerOf(fx), size: fx.size }, true),
           ...(fx.versions || []).slice().reverse().map(v => vRow(v, false)),
-          h("p", { class: "dv-note", text: `Lumen keeps the last ${KEEP} older versions. They count toward storage.` }));
+          h("p", { class: "dv-note", text: keep() ? `Lumen keeps the last ${keep()} older version${keep() === 1 ? "" : "s"}. They count toward storage.` : "Older versions aren't kept in this workspace." }));
       }
       function drawComments(fx) {
         const cs = (fx.comments || []).slice().sort((a, b) => (a.at || 0) - (b.at || 0)), me = meKey();
@@ -1257,7 +1262,7 @@
     };
     document.addEventListener("keydown", onKey);
 
-    const offs = ["files", "folders", "projects"].map(c => Data.on(c, () => { schedule(); if (c === "files") V?.refresh(); }));
+    const offs = ["files", "folders", "projects", "settings"].map(c => Data.on(c, () => { schedule(); if (c === "files" || c === "settings") V?.refresh(); })); // settings: versions on/off
     if (pending) setTimeout(schedule, 6500);
     draw();
     return () => {

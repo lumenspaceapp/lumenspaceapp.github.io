@@ -10,7 +10,15 @@
   const REPEAT_TXT = { day: "daily", week: "weekly", month: "monthly", year: "yearly" };
   const REMIND = [["", "No reminder"], ["0", "At start time"], ["5", "5 minutes before"], ["10", "10 minutes before"], ["15", "15 minutes before"], ["30", "30 minutes before"], ["60", "1 hour before"], ["1440", "1 day before"]];
   const ST_LABEL = { yes: "Going", maybe: "Maybe", no: "Declined", pending: "Invited" };
-  const WD = Array.from({ length: 7 }, (_, i) => new Date(2024, 0, i + 1).toLocaleDateString(undefined, { weekday: "short" })); // Mon..Sun
+  // workspace settings (js/prefs.js): business hours (week start, weekend, holidays, working hours), region, Tools → Calendar → rooms
+  const hrs = () => (window.Prefs ? Prefs.get("hours") : null) || { start: "09:00", end: "18:00", weekend: [0, 6], weekStart: 1, holidays: [] };
+  const WS = () => { const v = +(hrs().weekStart ?? 1); return [0, 1, 6].includes(v) ? v : 1; };
+  const weekendDays = () => Array.isArray(hrs().weekend) ? hrs().weekend : [0, 6];
+  const holidays = () => (Array.isArray(hrs().holidays) ? hrs().holidays : []).filter(x => x && /^\d{4}-\d\d-\d\d$/.test(x.date || ""));
+  const roomsOn = () => !window.Prefs || Prefs.tool("calendar", "rooms");
+  const time24 = () => !!(window.Prefs && Prefs.get("region.time24"));
+  // weekday names in display order, starting on the workspace's first day of the week (Jan 7 2024 is a Sunday)
+  const wdNames = () => Array.from({ length: 7 }, (_, i) => new Date(2024, 0, 7 + (WS() + i) % 7).toLocaleDateString(undefined, { weekday: "short" }));
   const mobile = () => innerWidth <= 760;
 
   /* ---------- dates: "YYYY-MM-DD" strings, maths on whole days (UTC so DST never shifts a day) ---------- */
@@ -22,10 +30,15 @@
   const toHM = m => { m = Math.max(0, Math.min(1439, Math.round(m))); return String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0"); };
   const dObj = s => new Date(s + "T00:00");
   const fmtD = (s, o = { month: "short", day: "numeric" }) => dObj(s).toLocaleDateString(undefined, o);
-  const fmtT = t => { const m = toMin(t); return m == null ? "" : new Date(2000, 0, 1, Math.floor(m / 60), m % 60).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); };
-  const hourLabel = hr => new Date(2000, 0, 1, hr).toLocaleTimeString([], { hour: "numeric" });
-  const wd = s => (dObj(s).getDay() + 6) % 7; // Monday = 0
+  const fmtT = t => {
+    const m = toMin(t); if (m == null) return "";
+    const r = Apps.fmtTime?.(toHM(m)); if (r && !/invalid/i.test(r)) return r;
+    return new Date(2000, 0, 1, Math.floor(m / 60), m % 60).toLocaleTimeString([], { hour: time24() ? "2-digit" : "numeric", minute: "2-digit", ...(time24() ? { hourCycle: "h23" } : {}) });
+  };
+  const hourLabel = hr => time24() ? String(hr).padStart(2, "0") + ":00" : new Date(2000, 0, 1, hr).toLocaleTimeString([], { hour: "numeric" });
+  const wd = s => (dObj(s).getDay() - WS() + 7) % 7; // first day of the week (Settings → Business hours) = 0
   const weekStart = s => add(s, -wd(s));
+  const isWE = s => weekendDays().includes(dObj(s).getDay());
   const nowMin = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
 
   /* ---------- event model (old docs lack the new fields: default them) ---------- */
@@ -167,7 +180,7 @@
           e.calendar === "personal" ? h("span", { class: "ev-badge", text: "🔒 My calendar" }) : h("span", { class: "ev-badge", text: "🏢 Company" }))),
       row("🕒", h("div", { text: whenText(o) }), isRep(e) ? h("small", { text: "🔁 " + repeatText(e) }) : null,
         remindOf(e) != null ? h("small", { text: "🔔 " + (REMIND.find(r => r[0] === String(remindOf(e)))?.[1] || remindOf(e) + " minutes before") }) : null),
-      e.room ? row("🚪", h("div", { text: roomName(e.room) || "Room removed" }), Data.get("events", e.room)?.capacity ? h("small", { text: Data.get("events", e.room).capacity + " seats" }) : null) : null,
+      e.room && roomsOn() ? row("🚪", h("div", { text: roomName(e.room) || "Room removed" }), Data.get("events", e.room)?.capacity ? h("small", { text: Data.get("events", e.room).capacity + " seats" }) : null) : null,
       e.where ? row("📍", /^https?:\/\//.test(e.where) ? h("a", { href: e.where, target: "_blank", rel: "noopener", text: e.where }) : h("div", { text: e.where })) : null,
       e.video ? row("📹", h("a", { class: "btn primary ev-join", href: e.video, target: "_blank", rel: "noopener", text: "Join video call" }), h("small", { class: "ev-url", text: e.video })) : null,
       row("👥", h("div", { class: "ev-sum", text: g.length ? counts.map(([s, n]) => `${n} ${ST_LABEL[s].toLowerCase()}`).join(" · ") : "Organizer: " + Data.person(owner).name }),
@@ -236,6 +249,7 @@
     if (r.id) Data.update("events", r.id, rec); else { await Data.add("events", rec); UI.toast("🚪 Room added"); }
   }
   function roomsManager() {
+    if (!roomsOn()) return UI.toast("Meeting rooms are switched off in Settings → Tools.");
     const box = h("div", { class: "cal-rooms" });
     const fill = () => {
       const t = Apps.today(), n = nowMin(), list = rooms();
@@ -257,7 +271,7 @@
 
   /* ---------- editor ---------- */
   function defaultTimes(date) {
-    let s = 10 * 60;
+    let s = Math.max(0, Math.min(22 * 60, toMin(hrs().start) ?? 9 * 60) + 60); // an hour after the working day starts (10:00 by default)
     if (date === Apps.today()) s = Math.min(22 * 60, Math.ceil((nowMin() + 1) / 60) * 60);
     return { start: toHM(s), finish: toHM(Math.min(1439, s + 60)) };
   }
@@ -378,9 +392,9 @@
       h("div", { class: "ed-sec" }, field("Attendees", ppl, busyNote)),
       h("div", { class: "ed-grid" },
         field("Calendar", calSeg),
-        field("Meeting room", h("div", { class: "ed-roomrow" }, roomSel, h("button", { type: "button", class: "btn", text: "Rooms", title: "Manage meeting rooms", onclick: roomsManager })), roomNote),
+        roomsOn() ? field("Meeting room", h("div", { class: "ed-roomrow" }, roomSel, h("button", { type: "button", class: "btn", text: "Rooms", title: "Manage meeting rooms", onclick: roomsManager })), roomNote) : null,
         field("Location", where),
-        field("Video call", vidBtn, vidBox)),
+        !window.Prefs || Prefs.tool("chat", "calls") || v.video ? field("Video call", vidBtn, vidBox) : null), // Settings → Tools → Chat → calls
       field("Description", desc),
       h("div", { class: "ed-grid" }, field("Colour", colors), field("Files", files)),
       h("div", { class: "ed-foot" },
@@ -411,10 +425,10 @@
     const invBtn = h("button", { class: "btn cal-inv-btn", title: "Invitations waiting for your answer", onclick: e => invitations(e.currentTarget) });
     const newBtn = () => h("button", { class: "btn primary", text: "+ Event", onclick: () => editEvent(null, view === "day" ? cur : undefined) });
     const viewSeg = h("div", { class: "seg cal-views" }, ...[["month", "Month"], ["week", "Week"], ["day", "Day"], ["agenda", "Agenda"]].map(([k, l]) => h("button", { class: view === k ? "on" : "", dataset: { v: k }, text: l, onclick: () => setView(k) })));
+    const roomsBtn = h("button", { class: "btn cal-rooms-btn", title: "Meeting rooms", onclick: roomsManager }, h("span", { text: "🚪" }), h("span", { class: "lbl", text: " Rooms" }));
     const tog = (lab, k, title) => { const s = h("span", { class: "switch" + (F[k] ? " on" : "") }); return h("button", { class: "chip-btn", title, onclick: () => { F[k] = !F[k]; s.classList.toggle("on", F[k]); try { localStorage.setItem("lumen-cal-filters", JSON.stringify(F)); } catch {} draw(); } }, s, lab); };
     root.append(
-      Apps.header("Calendar", "📅", "Meetings, deadlines and time off in one place", invBtn,
-        h("button", { class: "btn cal-rooms-btn", title: "Meeting rooms", onclick: roomsManager }, h("span", { text: "🚪" }), h("span", { class: "lbl", text: " Rooms" })), newBtn()),
+      Apps.header("Calendar", "📅", "Meetings, deadlines and time off in one place", invBtn, roomsBtn, newBtn()),
       h("div", { class: "app-toolbar cal-toolbar" },
         h("div", { class: "cal-nav" },
           h("button", { class: "btn", text: "Today", onclick: () => { cur = Apps.today(); anim = true; draw(); } }),
@@ -450,6 +464,9 @@
           cls: (inv ? " inv" : "") + (st === "no" ? " declined" : "") + (st === "pending" ? " pending" : "") + (e.calendar === "personal" ? " personal" : "") });
       });
       const ov = (kind, id, date, end, title, color, open) => out.push({ kind, key: kind + id + date, date, end, allDay: true, sm: 0, fm: 1440, title, color, open, cls: " ov" });
+      // public holidays from Settings → Business hours
+      holidays().forEach(x => { if (x.date >= from && x.date <= to) out.push({ kind: "holiday", key: "hol" + x.date + (x.name || ""), date: x.date, end: x.date, allDay: true, sm: 0, fm: 1440,
+        title: "🎉 " + (x.name || "Holiday"), color: "#ec4899", open: () => UI.toast("🎉 " + (x.name || "Holiday") + " · " + fmtD(x.date, { weekday: "long", month: "long", day: "numeric" })), cls: " ov hol" }); });
       if (F.tasks) Data.list("tasks").forEach(x => {
         if (!okDate(x.deadline) || x.status === "done" || x.kind || x.deleted || x.deadline < from || x.deadline > to) return;
         if (F.mine && x.assignee !== m && !(x.participants || []).includes(m) && !(!x.assignee && x.by === m)) return;
@@ -503,10 +520,10 @@
     function month(all, gs) {
       const first = cur.slice(0, 8) + "01", mon = first.slice(0, 7), t = Apps.today(), max = mobile() ? 2 : 3;
       label.textContent = fmtD(first, { month: "long", year: "numeric" });
-      const grid = h("div", { class: "cal-grid cal-month" }, ...WD.map(d => h("div", { class: "cal-wd", text: d })));
+      const grid = h("div", { class: "cal-grid cal-month" }, ...wdNames().map(d => h("div", { class: "cal-wd", text: d })));
       for (let i = 0; i < 42; i++) {
         const ds = add(gs, i), its = all.filter(x => x.date <= ds && x.end >= ds).sort(byTime);
-        const cell = h("div", { class: "cal-day" + (ds.slice(0, 7) !== mon ? " other" : "") + (ds === t ? " today" : "") + (wd(ds) >= 5 ? " we" : ""), onclick: () => editEvent(null, ds) },
+        const cell = h("div", { class: "cal-day" + (ds.slice(0, 7) !== mon ? " other" : "") + (ds === t ? " today" : "") + (isWE(ds) ? " we" : ""), onclick: () => editEvent(null, ds) },
           h("div", { class: "cal-dh" }, h("button", { class: "cal-n", text: +ds.slice(8), title: "Open this day", onclick: e => { e.stopPropagation(); cur = ds; setView("day"); } })),
           ...its.slice(0, max).map(it => chip(it, ds)),
           its.length > max ? h("button", { class: "cal-more", text: `+${its.length - max} more`, onclick: e => { e.stopPropagation(); cur = ds; setView("day"); } }) : null);
@@ -528,7 +545,7 @@
       label.textContent = n === 1 ? fmtD(from, { weekday: "long", month: "long", day: "numeric" }) + (from.slice(0, 4) !== t.slice(0, 4) ? ", " + from.slice(0, 4) : "")
         : `${fmtD(from)} – ${fmtD(days[n - 1], { month: "short", day: "numeric", year: "numeric" })}`;
       const head = h("div", { class: "tg-head" }, h("div", { class: "tg-corner" }),
-        ...days.map(ds => h("button", { class: "tg-dh" + (ds === t ? " today" : "") + (wd(ds) >= 5 ? " we" : ""), title: n > 1 ? "Open this day" : "", onclick: () => { if (n > 1) { cur = ds; setView("day"); } } },
+        ...days.map(ds => h("button", { class: "tg-dh" + (ds === t ? " today" : "") + (isWE(ds) ? " we" : ""), title: n > 1 ? "Open this day" : "", onclick: () => { if (n > 1) { cur = ds; setView("day"); } } },
           h("span", { text: fmtD(ds, { weekday: n === 1 ? "long" : "short" }) }), h("b", { text: +ds.slice(8) }))));
       const allday = h("div", { class: "tg-allday" }, h("div", { class: "tg-corner", text: "All day" }), ...days.map(ds => {
         const c = h("div", { class: "tg-ad" + (ds === t ? " today" : ""), onclick: () => editEvent(null, ds, { allDay: true }) },
@@ -538,7 +555,10 @@
       const gut = h("div", { class: "tg-gut" }, ...Array.from({ length: 24 }, (_, hr) => hr ? h("div", { class: "tg-hr", style: { top: hr * HOUR + "px" }, text: hourLabel(hr) }) : null));
       gridDays = days;
       gridCols = days.map(ds => {
-        const col = h("div", { class: "tg-col" + (ds === t ? " today" : "") + (wd(ds) >= 5 ? " we" : ""), dataset: { date: ds } });
+        const col = h("div", { class: "tg-col" + (ds === t ? " today" : "") + (isWE(ds) ? " we" : ""), dataset: { date: ds } });
+        // working hours (Settings → Business hours) shaded on working days; clicks pass through to the column
+        const ws = toMin(hrs().start), we = toMin(hrs().end);
+        if (!isWE(ds) && !holidays().some(x => x.date === ds) && ws != null && we != null && we > ws) col.append(h("div", { class: "tg-work", style: { top: ws / 60 * HOUR + "px", height: (we - ws) / 60 * HOUR + "px" } }));
         col.addEventListener("click", e => {
           if (e.target !== col || Date.now() - justDragged < 350) return;
           const r = col.getBoundingClientRect(), mm = Math.max(0, Math.min(23 * 60, Math.floor((e.clientY - r.top) / HOUR * 2) * 30));
@@ -637,7 +657,8 @@
       if (anim) { el.classList.add("cal-anim"); anim = false; }
       body.replaceChildren(el);
       const ns = body.querySelector(".tg-scroll");
-      if (ns) ns.scrollTop = key === scrollKey && sc ? top : (from <= drawnDay && drawnDay <= to ? Math.max(0, nowMin() / 60 * HOUR - 140) : 7.5 * HOUR);
+      if (ns) ns.scrollTop = key === scrollKey && sc ? top : (from <= drawnDay && drawnDay <= to ? Math.max(0, nowMin() / 60 * HOUR - 140) : Math.max(0, ((toMin(hrs().start) ?? 480) - 30) / 60 * HOUR));
+      roomsBtn.hidden = !roomsOn();
       scrollKey = key;
       const n = invites().length;
       invBtn.replaceChildren(h("span", { text: "📨" }), h("span", { class: "lbl", text: " Invitations" }), n ? h("span", { class: "cal-count", text: n }) : null);
@@ -647,7 +668,7 @@
       if (Apps.today() !== drawnDay) return draw();
       body.querySelectorAll(".tg-now").forEach(l => (l.style.top = nowMin() / 60 * HOUR + "px"));
     }, 60000);
-    const offs = ["events", "tasks", "deals", "absences", "people"].map(c => Data.on(c, draw));
+    const offs = ["events", "tasks", "deals", "absences", "people", "settings"].map(c => Data.on(c, draw)); // settings: workspace hours, rooms, region
 
     // deep link: #/app/calendar/<eventId>?date=YYYY-MM-DD
     if (argId) {

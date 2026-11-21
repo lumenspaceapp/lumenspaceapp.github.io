@@ -289,12 +289,22 @@ async function create(name, src, icon = "") {
 async function invite(email) {
   email = email.trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return UI.toast("Enter a valid email address");
+  // Settings → Employees → Allowed email domains (empty = any address)
+  const domains = (wsPref("people.inviteDomains") || []).map(d => String(d).trim().toLowerCase().replace(/^@/, "")).filter(Boolean);
+  if (domains.length && !domains.includes(email.split("@")[1])) {
+    UI.toast(`This workspace only invites addresses ending in ${domains.map(d => "@" + d).join(", ")}. An admin can change this in Settings → Employees.`);
+    return false;
+  }
   try { await fb.updateDoc(wsRef, { members: fb.arrayUnion(email), ...(adminWrite() ? { roleEdit: "" } : {}) }); }
-  catch (e) { UI.toast(e.code === "permission-denied" ? "Only the owner, admins and managers can invite people" : e.message); return false; }
+  catch (e) { UI.toast(e.code === "permission-denied" ? "You can't invite people here. Ask an admin (Settings → Employees → Who can invite)." : e.message); return false; }
   await sendInvite(email);
   return true;
 }
+// a workspace setting (js/prefs.js) without failing when it isn't loaded
+const wsPref = path => { try { return window.Prefs ? Prefs.get(path) : undefined; } catch { return undefined; } };
 async function sendInvite(email) {
+  // Settings → Security → email-link sign-in switched off: no emailed sign-in link, just the workspace link to open with Google
+  if (wsPref("security.emailLinks") === false) return sendInviteDialog(email, "Email sign-in links are switched off for this workspace.");
   UI.toast(`Sending invite to ${email}…`);
   try { await emailInvite(email); UI.toast(`✉️ Invite emailed to ${email}`); }
   catch (e) {
@@ -326,7 +336,12 @@ async function removeMember(email) {
   // their role goes with them (FieldPath: emails contain dots); `roleEdit` names the one person this write changes (the rules check it for admins)
   const ws = Cloud.ws, more = ws?.roles && email in ws.roles ? [new fb.FieldPath("roles", email), fb.deleteField()] : [];
   if (ws?.pendingOwner === email && ws.owner === Cloud.user?.uid) more.push("pendingOwner", fb.deleteField());
-  try { await fb.updateDoc(wsRef, "members", fb.arrayRemove(email), "roleEdit", email, ...more); UI.toast(`Removed ${email}`); return true; }
+  try {
+    await fb.updateDoc(wsRef, "members", fb.arrayRemove(email), "roleEdit", email, ...more); UI.toast(`Removed ${email}`);
+    // Settings → Communications: post a notice in #general when someone is removed
+    if (wsPref("comms.announceJoins") && window.Data) Data.add("chat", { channel: "general", kind: "sys", text: `${Data.person(email).name} is no longer a member of the workspace.`, reactions: {} });
+    return true;
+  }
   catch (e) { UI.toast(e.code === "permission-denied" ? "Not allowed: the owner removes anyone, admins remove people below admin. Publish the latest firestore.rules." : e.message); return false; }
 }
 /* access levels (js/access.js): written field by field so two admins editing at once don't overwrite each other */
@@ -448,6 +463,7 @@ Cloud.share = async anchor => {
   UI.menu(anchor, items, { align: "end" });
 };
 Cloud.signIn = signIn;
+Cloud.signOut = signOutNow;
 Cloud.invite = invite;
 Cloud.removeMember = removeMember;
 Cloud.transferOwnership = transferOwnership;

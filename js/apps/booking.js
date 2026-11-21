@@ -11,8 +11,17 @@
   const PAL = ["#7c5cff", "#3b82f6", "#06b6d4", "#10b981", "#f59e0b", "#ef4444", "#ec4899", "#8b5cf6"];
   const DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
   const DAY_LONG = DAYS.map((_, i) => new Date(2024, 0, i + 1).toLocaleDateString(undefined, { weekday: "long" }));
-  const DAY_MINI = DAYS.map((_, i) => new Date(2024, 0, i + 1).toLocaleDateString(undefined, { weekday: "narrow" }));
-  const DEF_HOURS = { mon: ["09:00", "18:00"], tue: ["09:00", "18:00"], wed: ["09:00", "18:00"], thu: ["09:00", "18:00"], fri: ["09:00", "18:00"], sat: null, sun: null };
+  // workspace settings (js/prefs.js): business hours (start/end, weekend, first day of the week), region, default phone country code
+  const wsHours = () => (window.Prefs ? Prefs.get("hours") : null) || { start: "09:00", end: "18:00", weekend: [0, 6], weekStart: 1 };
+  const okHM = (v, d) => /^\d\d?:\d\d$/.test(v || "") ? v : d;
+  const openT = () => okHM(wsHours().start, "09:00"), closeT = () => okHM(wsHours().end, "18:00");
+  const WS = () => { const v = +(wsHours().weekStart ?? 1); return [0, 1, 6].includes(v) ? v : 1; };
+  // Monday-first names, shown starting on the workspace's first day of the week (Jan 7 2024 is a Sunday)
+  const dayMini = () => Array.from({ length: 7 }, (_, i) => new Date(2024, 0, 7 + (WS() + i) % 7).toLocaleDateString(undefined, { weekday: "narrow" }));
+  // default opening hours = the workspace's business hours on working days (used until Booking settings have their own hours)
+  const defHours = () => { const we = Array.isArray(wsHours().weekend) ? wsHours().weekend : [0, 6]; return Object.fromEntries(DAYS.map((d, i) => [d, we.includes((i + 1) % 7) ? null : [openT(), closeT()]])); };
+  const time24 = () => !!(window.Prefs && Prefs.get("region.time24"));
+  const phonePrefix = () => { const c = String((window.Prefs && Prefs.get("people.phoneCountry")) || "").trim().replace(/[^\d+]/g, ""); return /^\+?\d{1,4}$/.test(c) ? "+" + c.replace("+", "") + " " : ""; };
   const STATUS = {
     unconfirmed: { label: "Not confirmed", ic: "⏳" },
     confirmed: { label: "Confirmed", ic: "👍" },
@@ -35,11 +44,15 @@
   const toHM = m => { m = Math.max(0, Math.min(1439, Math.round(m))); return String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0"); };
   const dObj = s => new Date(s + "T00:00");
   const fmtD = (s, o = { month: "short", day: "numeric" }) => okDate(s) ? dObj(s).toLocaleDateString(undefined, o) : "";
-  const fmtT = t => { const m = toMin(t); return m == null ? "" : new Date(2000, 0, 1, Math.floor(m / 60), m % 60).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); };
+  const fmtT = t => {
+    const m = toMin(t); if (m == null) return "";
+    try { const r = Apps.fmtTime?.(toHM(m)); if (r && !/invalid|nan/i.test(r)) return r; } catch {}
+    return new Date(2000, 0, 1, Math.floor(m / 60), m % 60).toLocaleTimeString([], time24() ? { hour: "2-digit", minute: "2-digit", hourCycle: "h23" } : { hour: "numeric", minute: "2-digit" });
+  };
   const fmtM = m => fmtT(toHM(m));
-  const hourLabel = hr => new Date(2000, 0, 1, hr).toLocaleTimeString([], { hour: "numeric" });
-  const wd = s => (dObj(s).getDay() + 6) % 7; // Monday = 0
-  const weekStart = s => add(s, -wd(s));
+  const hourLabel = hr => time24() ? String(hr).padStart(2, "0") + ":00" : new Date(2000, 0, 1, hr).toLocaleTimeString([], { hour: "numeric" });
+  const wd = s => (dObj(s).getDay() + 6) % 7; // Monday = 0 (index into DAYS)
+  const weekStart = s => add(s, -((dObj(s).getDay() - WS() + 7) % 7)); // first day of the week from Settings → Business hours
   const nowMin = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
   const durTxt = m => m >= 60 ? Math.floor(m / 60) + " h" + (m % 60 ? " " + (m % 60) + " min" : "") : m + " min";
   const addMonth = (m, n) => { const d = dObj(m.slice(0, 8) + "01"); d.setMonth(d.getMonth() + n); return Apps.iso(d).slice(0, 8) + "01"; };
@@ -47,7 +60,7 @@
   /* ---------- settings ---------- */
   function S() {
     const s = Data.get("settings", "booking") || {};
-    return { hours: { ...DEF_HOURS, ...(s.hours || {}) }, slot: [15, 30, 60].includes(+s.slot) ? +s.slot : 30, currency: s.currency || Apps.currency() };
+    return { hours: { ...defHours(), ...(s.hours || {}) }, slot: [15, 30, 60].includes(+s.slot) ? +s.slot : 30, currency: s.currency || Apps.currency() };
   }
   // working hours of a date as minutes [open, close], or null when closed
   function hoursOf(date, st = S()) {
@@ -235,7 +248,7 @@
 
     /* client */
     const cName = inp("text", client.name || "", { placeholder: "Client name, phone or email to search", autocomplete: "off" });
-    const cPhone = inp("tel", client.phone || "", { placeholder: "Phone" });
+    const cPhone = inp("tel", client.phone || phonePrefix(), { placeholder: "Phone" });
     const cEmail = inp("email", client.email || "", { placeholder: "Email" });
     const linkRow = h("div", { class: "bk-ed-link" });
     function paintLink() {
@@ -305,7 +318,7 @@
       if (!list.length) return UI.toast("Choose a resource first");
       const ids = g.map(x => x.id);
       if (stat !== "cancelled") { const cl = list.flatMap(r => conflicts(r, d, s, f, ids)); if (cl.length && !await askOverlap(cl)) return; }
-      client = { ...client, name: cName.value.trim(), phone: cPhone.value.trim(), email: cEmail.value.trim() };
+      client = { ...client, name: cName.value.trim(), phone: cPhone.value.trim() === phonePrefix().trim() ? "" : cPhone.value.trim(), email: cEmail.value.trim() };
       if (saveContact && !client.contact && client.name) {
         client.contact = Data.uid();
         Data.add("contacts", { name: client.name, phone: client.phone, email: client.email, owner: me(), activities: [], source: "Booking" }, client.contact);
@@ -539,7 +552,7 @@
             h("button", { class: "icon-btn xs", text: "‹", title: "Previous month", onclick: () => { m = addMonth(m, -1); paint(); } }),
             h("b", { text: fmtD(m, { month: "long", year: "numeric" }) }),
             h("button", { class: "icon-btn xs", text: "›", title: "Next month", onclick: () => { m = addMonth(m, 1); paint(); } })),
-          h("div", { class: "bk-mini-g" }, ...DAY_MINI.map(d => h("span", { class: "bk-mini-wd", text: d })),
+          h("div", { class: "bk-mini-g" }, ...dayMini().map(d => h("span", { class: "bk-mini-wd", text: d })),
             ...Array.from({ length: 42 }, (_, i) => {
               const ds = add(gs, i), n = counts[ds] || 0;
               return h("button", { class: "bk-mini-d" + (ds.slice(0, 7) !== m.slice(0, 7) ? " other" : "") + (ds === t ? " today" : "") + (ds === cur ? " sel" : "") + (!hoursOf(ds) ? " closed" : ""),
@@ -835,11 +848,11 @@
       let slotV = st.slot, currency = st.currency;
       const rows = DAYS.map((d, i) => {
         const open = Array.isArray(hours[d]);
-        const a = h("input", { class: "menu-input", type: "time", step: 300, value: open ? hours[d][0] : "09:00", disabled: !open });
-        const b = h("input", { class: "menu-input", type: "time", step: 300, value: open ? hours[d][1] : "18:00", disabled: !open });
+        const a = h("input", { class: "menu-input", type: "time", step: 300, value: open ? hours[d][0] : openT(), disabled: !open });
+        const b = h("input", { class: "menu-input", type: "time", step: 300, value: open ? hours[d][1] : closeT(), disabled: !open });
         const sw = h("span", { class: "switch" + (open ? " on" : "") });
         const row = h("div", { class: "bk-hrow" + (open ? "" : " off") },
-          h("button", { class: "chip-btn", onclick: () => { const on = !Array.isArray(hours[d]); hours[d] = on ? [a.value || "09:00", b.value || "18:00"] : null; sw.classList.toggle("on", on); a.disabled = b.disabled = !on; row.classList.toggle("off", !on); } }, sw, h("b", { text: DAY_LONG[i] })),
+          h("button", { class: "chip-btn", onclick: () => { const on = !Array.isArray(hours[d]); hours[d] = on ? [a.value || openT(), b.value || closeT()] : null; sw.classList.toggle("on", on); a.disabled = b.disabled = !on; row.classList.toggle("off", !on); } }, sw, h("b", { text: DAY_LONG[i] })),
           a, h("span", { class: "bk-muted", text: "–" }), b);
         const upd = () => { if (Array.isArray(hours[d])) hours[d] = [a.value, b.value]; };
         a.addEventListener("change", upd); b.addEventListener("change", upd);

@@ -248,3 +248,9 @@
 /* the frozen task column must hide the timeline scrolling beneath it */
 .g-label { background: color-mix(in srgb, var(--glass-strong) 35%, var(--bg, #f6f5fb)); }
 html[data-theme="dark"] .g-label { background: color-mix(in srgb, var(--glass-strong) 35%, var(--bg, #16151d)); }
+
+/* parts switched off in Settings → Tools are hidden with the hidden attribute */
+.app-tabs > button[hidden], .app-actions > [hidden], .seg > button[hidden], .tk-eff[hidden] { display: none !important; }
+/* Gantt weekend columns follow Settings → Business hours (tasks.js sets --we-bg) */
+.g-inner { --g-we: color-mix(in srgb, var(--hover) 70%, transparent); }
+.g-track { background-image: linear-gradient(90deg, var(--line) 1px, transparent 1px), var(--we-bg, linear-gradient(90deg, transparent calc(var(--px) * 5), var(--g-we) calc(var(--px) * 5))); }

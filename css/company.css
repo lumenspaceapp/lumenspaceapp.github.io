@@ -423,3 +423,6 @@ button.co-node-head:hover { background: var(--active); }
 }
 @media (hover: none) { .co-x, .co-node-more { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .co-app *, .co-slider * { animation: none !important; transition: none !important; } }
+
+/* parts switched off in Settings → Tools are hidden with the hidden attribute */
+.app-tabs > button[hidden], .app-actions > [hidden], .seg > button[hidden], .tk-eff[hidden] { display: none !important; }
