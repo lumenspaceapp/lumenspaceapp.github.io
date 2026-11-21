@@ -241,3 +241,22 @@ kbd { font-family: var(--font); font-size: 11px; color: var(--faint); background
   background-size: 320px 260px; animation: twinkle 9s ease-in-out infinite alternate; }
 @keyframes twinkle { from { opacity: .55; } to { opacity: 1; } }
 body.no-motion .dots { animation: none; }
+
+/* ===== Rendering fix: no blur inside blur =====
+   #main and #sidebar are already frosted. Cards inside them that blur *again* (nested backdrop-filter) make Chrome/Edge
+   drop whole areas of the page (blank panels, missing buttons), especially with strong blur. Inner cards keep their
+   tint and border but don't re-blur; menus, windows and side panels live in #layer and keep their own blur. */
+#main .glass, #main .glass-strong, #sidebar .glass, #sidebar .glass-strong {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+#main .glass { background: color-mix(in srgb, var(--glass) 70%, rgba(255, 255, 255, .22)); }
+[data-theme="dark"] #main .glass { background: color-mix(in srgb, var(--glass) 75%, rgba(255, 255, 255, .04)); }
+
+/* ===== Dark wallpapers in light theme (Deep space): keep panels light enough for dark text ===== */
+:root[data-theme="light"][data-wall-kind="space"] {
+  --glass: rgba(255, 255, 255, max(.8, var(--ga)));
+  --glass-strong: rgba(255, 255, 255, .95);
+}
+:root[data-theme="light"][data-wall-kind="space"] #sidebar,
+:root[data-theme="light"][data-wall-kind="space"] #main { background: rgba(255, 255, 255, max(.8, var(--ga))); }
