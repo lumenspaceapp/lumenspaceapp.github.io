@@ -28,7 +28,8 @@ service cloud.firestore {
       match /{coll}/{docId} {
         allow read, write: if isMember(ws) && coll in ['tasks', 'projects', 'chat', 'channels', 'feed', 'events', 'leads', 'deals',
           'contacts', 'companies', 'people', 'absences', 'timelog', 'files', 'folders', 'rules', 'notifications',
-          'products', 'quotes', 'activities', 'history', 'items', 'settings', 'bookings', 'inventory', 'forms', 'formsubs'];
+          'products', 'quotes', 'activities', 'history', 'items', 'settings', 'bookings', 'inventory', 'forms', 'formsubs',
+          'reports', 'shifts', 'meetings', 'lists', 'listitems', 'processes', 'procitems', 'workflows', 'wfruns'];
       }
       // CRM web forms: anyone with the link can read a published form...
       match /forms/{formId} {

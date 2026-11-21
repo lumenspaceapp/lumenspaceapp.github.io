@@ -69,3 +69,35 @@ Note: the Firebase rules for these are published by the lead later; until then t
 - Booking: `js/apps/booking.js`, `css/booking.css`.
 - Inventory: `js/apps/inventory.js`, `css/inventory.css`.
 All other phase 1 rules still apply (no git, no browser, no other files, syntax check with node, short report).
+
+---
+
+# Phase 3 additions (Company & HR, workgroups & Scrum, Lists / RPA / approvals, access roles)
+
+## New collections (allowed now, plus all earlier ones)
+`reports, shifts, meetings, lists, listitems, processes, procitems, workflows, wfruns`. The lead publishes the Firebase rules later; test in a private (local) workspace.
+
+## Shared schemas
+- **settings "org"** (HR builder owns): `{ departments: [{ id, name, parent (id|null), head (person key|null) }] }`. People keep `dept` as the department **name** (existing data). If missing, departments are derived from people's `dept` values.
+- **absences** (existing: `who, type, from, to, note`) gain `status: "pending"|"approved"|"declined"` (missing = approved, old data), `approver`, `decidedAt`, `reason`. Only approved absences count in the absence chart / "who's out" (js/home.js and calendar overlays read absences: missing status = approved, so they keep working; the HR builder must make sure pending/declined ones are clearly marked and the lead will filter them in shared files).
+- **reports** (work reports): `{ who, period: "day"|"week"|"month", from, to, text, tasksDone: [taskIds], status: "sent"|"approved"|"returned", approver, comment, score: 1..5 }`.
+- **shifts** (work schedules): `kind: "template"` `{ name, start: "HH:MM", finish: "HH:MM", color, days: [0-6] }`; `kind: "shift"` `{ who, date, start, finish, template?, note }`.
+- **meetings** (meetings & briefings): `{ title, date, start, finish, where, video, chair (key), attendees: [keys], agenda: [{ id, text, done }], minutes (text), decisions: [{ text, task? }], status: "planned"|"held"|"cancelled", event? (events id) }`.
+- **projects** (existing, used by Tasks as task groups: `name, color, desc?`) become **workgroups** (Groups builder owns): add `members: [keys], owner, moderators: [keys], privacy: "open"|"closed"|"secret", desc, avatar (emoji), type: "project"|"group"|"scrum", start, finish, chat (channels id), folder (folders id), archived`. Missing members = everyone (old projects stay visible). Tasks keep using `task.project`. Scrum adds to tasks: `sprint` (sprint id), `points` (story points), `epic`; sprints are stored on the project doc: `sprints: [{ id, name, start, finish, goal, status: "planned"|"active"|"done" }]`, `epics: [{ id, name, color }]`, backlog = project tasks without a sprint.
+- **feed** posts may carry `group` (projects id): such posts are visible only to group members and show in that group's feed (Groups builder edits feed.js for this). **events** may carry `project`.
+- **lists** (custom databases, Bitrix "Lists"): `{ name, icon, desc, fields: [{ key, label, type: "text"|"number"|"date"|"select"|"person"|"checkbox"|"file"|"url", options?, required }], access: "all"|"admins" }`; **listitems**: `{ list, values: { key: value }, deleted }`.
+- **processes** (RPA): `{ name, icon, stages: [{ id, name, color, people: [keys], fields: [keys] }], fields: [...same as lists], done: stageId }`; **procitems**: `{ process, title, stage, values, history: [{ stage, by, at }], assignees }`.
+- **workflows** (approval templates): `{ name, icon, desc, fields: [...], steps: [{ id, type: "approve"|"notify"|"task", who: "manager"|"head"|"person"|"admins", person?, label }], active }`; **wfruns**: `{ workflow, values, by, status: "running"|"approved"|"declined"|"cancelled", step (index), decisions: [{ step, who, decision: "approved"|"declined", comment, at }] }`.
+- **workspace doc** (`workspaces/{ws}`, read via `window.Cloud.ws`): Access builder adds `roles: { [email]: "admin"|"member"|"guest" }` (owner is `ws.ownerEmail` and is always admin; missing = member) and `perms: { [area]: { view: [roles], edit: [roles] } }` where area is an app name (crm, inventory, company, booking, automation, …).
+
+## Interfaces between phase 3 files (implement exactly these names)
+- **js/access.js** (Access builder): `Apps.role(key?)` → "owner"|"admin"|"member"|"guest"; `Apps.isAdmin(key?)`; `Apps.can(area, level = "view")` → bool (level "view"|"edit"|"admin"; private workspace → always true); `Apps.onAccess` (Set of callbacks when roles/perms change). Everyone else: **guard with `Apps.can ? Apps.can(...) : true`**, and use `Apps.isAdmin?.()` for admin-only settings (configure lists/processes/workflows, approve anyone's leave, HR settings).
+- **js/apps/company.js** (HR builder): `Apps.HR = { managerOf(key) → key|null /* head of the person's department, or of the parent department if they are the head */, departments(), headOf(deptName), isOut(key, isoDate) → bool /* approved absence */ }`.
+- **js/apps/groups.js** (Groups builder): registers sidebar app `groups` ("Workgroups", 👥) and `Apps.Groups = { open(id, tab?), mine() → projects I can see, canSee(project) }`. Tasks/Feed integrations live in tasks.js/feed.js edits by the same builder.
+- **js/apps/automation.js** (Automation builder): keeps the existing rules engine and app `automation`; adds tabs Lists, RPA, Approvals; sets `Apps.Workflows = { start(workflowId, values?), pending() → runs waiting for me }`. Approvals resolve "manager" with `Apps.HR?.managerOf(by)` (fallback: workspace admins).
+
+## Files each phase 3 builder may edit
+- HR: `js/apps/company.js`, `css/company.css`.
+- Groups: `js/apps/groups.js`, `css/groups.css`, and **targeted edits** in `js/apps/tasks.js` (project = workgroup visibility, Scrum fields and views) and `js/apps/feed.js` (group posts) — no one else edits those two files in phase 3.
+- Automation: `js/apps/automation.js`, `css/automation.css`.
+- Access: `js/access.js`, `css/access.css`, and targeted edits in `js/apps.js` (sidebar: hide apps you can't view), `js/cloud.js` (roles UI in the workspace/share menu, saving roles/perms on the workspace doc) and `firestore.rules` (only the workspace-doc update rule: roles/perms changes by owner or admins). No one else edits those files in phase 3.

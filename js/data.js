@@ -5,7 +5,9 @@
   const LKEY = "lumen-apps-local";
   const COLS = ["tasks", "projects", "chat", "channels", "feed", "events", "leads", "deals", "contacts", "companies", "people", "absences", "timelog", "files", "folders", "rules", "notifications",
     // phase 2: sales, CRM extras, booking, inventory, web forms
-    "products", "quotes", "activities", "history", "items", "settings", "bookings", "inventory", "forms", "formsubs"];
+    "products", "quotes", "activities", "history", "items", "settings", "bookings", "inventory", "forms", "formsubs",
+    // phase 3: HR, lists, processes, approvals
+    "reports", "shifts", "meetings", "lists", "listitems", "processes", "procitems", "workflows", "wfruns"];
   let local; try { local = JSON.parse(localStorage.getItem(LKEY)) || {}; } catch { local = {}; }
   const cache = {}, subs = {}, unsubs = {}, listeners = {};
   let saveT;
