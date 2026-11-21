@@ -77,19 +77,20 @@
       const me = Data.me().key, out = [], r = chatRead(), byCh = {};
       Data.list("chat").forEach(m => {
         if (m.by === me || !m.channel || (m.at || 0) <= (r[m.channel] || 0)) return;
-        if (m.channel.startsWith("dm:") && !m.channel.slice(3).split("|").includes(me)) return;
+        if (m.deleted || !canSeeChat(m.channel, me)) return;
+        if (!m.channel.startsWith("dm:") && m.channel !== "general" && !Data.get("channels", m.channel)) return; // channel was deleted
         (byCh[m.channel] ||= []).push(m);
       });
       Object.entries(byCh).forEach(([ch, ms]) => {
         ms.sort((a, b) => b.at - a.at);
         const last = ms[0], who = Data.person(last.by), dm = ch.startsWith("dm:"), n = ms.length > 99 ? "99+" : ms.length, s = ms.length === 1 ? "" : "s";
-        const chName = "#" + ((Data.list("channels").find(c => c.id === ch) || {}).name || ch);
+        const chName = window.ChatAccess?.title ? ChatAccess.title(ch) : "#" + ((Data.list("channels").find(c => c.id === ch) || {}).name || ch);
         out.push({ kind: "chat", ch, at: last.at, person: who, title: dm ? `${n} unread message${s} from ${who.name}` : `${n} new message${s} in ${chName}`,
-          sub: (dm ? "" : who.name + ": ") + (last.kind === "call" ? "📹 Video call" : String(last.text || "")), link: "#/app/chat/" + encodeURIComponent(ch) });
+          sub: last.kind === "sys" ? String(last.text || "") : (dm ? "" : who.name + ": ") + (last.kind === "call" ? "📹 Video call" : String(last.text || "") || ((last.files || []).length ? "📎 " + last.files.map(f => f.name).join(", ") : "")), link: "#/app/chat/" + encodeURIComponent(ch) });
       });
       out.sort((a, b) => b.at - a.at);
       const day = today();
-      Data.list("tasks").filter(t => t.status !== "done" && t.deadline && t.deadline <= day && (t.assignee === me || (!t.assignee && t.by === me)))
+      liveTasks().filter(t => t.status !== "done" && t.status !== "review" && t.deadline && t.deadline <= day && isMyTask(t, me))
         .sort((a, b) => a.deadline.localeCompare(b.deadline))
         .forEach(t => out.push({ kind: "task", id: t.id, icon: t.deadline < day ? "⏰" : "✅", late: t.deadline < day, title: t.title || "Untitled task",
           sub: t.deadline < day ? "Overdue · was due " + fmtDate(t.deadline) : "Due today", link: "#/app/tasks/" + t.id }));
@@ -137,7 +138,7 @@
       const attn = todo.map(x => h("div", { class: "mi notif attn" + (x.late ? " late" : ""), role: "button", tabindex: 0, onclick: () => go(x.link), onkeydown: e => { if (e.key === "Enter") go(x.link); } },
         x.person ? avatar(x.person, 26) : h("span", { class: "nt-lead", text: x.icon }),
         h("span", { class: "nt" }, h("span", { class: "nt-t", text: x.title }), h("small", { text: x.sub })),
-        x.kind === "task" ? h("button", { class: "nt-done", title: "Mark done", "aria-label": "Mark task done", html: "✓", onclick: e => { e.stopPropagation(); Data.update("tasks", x.id, { status: "done", completedAt: Date.now() }); UI.toast("✅ Task done"); } }) : null));
+        x.kind === "task" ? h("button", { class: "nt-done", title: "Mark done", "aria-label": "Mark task done", html: "✓", onclick: e => { e.stopPropagation(); const tk = Data.get("tasks", x.id); if (tk && Apps.Tasks?.setStatus) Apps.Tasks.setStatus(tk, "done"); else Data.update("tasks", x.id, { status: "done", completedAt: Date.now() }); UI.toast("✅ Task done"); } }) : null));
       const recent = mine.slice(0, 20).map(n => h("button", { class: "mi notif" + (n.read ? "" : " unread"), onclick: () => { Data.update("notifications", n.id, { read: true }); go(n.link); } },
         avatar(Data.person(n.by), 26), h("span", { class: "nt" }, h("span", { html: n.text }), preview(n) ? h("span", { class: "nt-body", text: preview(n) }) : null, h("small", { text: UI.timeAgo(n.at) }))));
       const anyUnread = mine.some(n => !n.read) || todo.some(x => x.kind === "chat");
@@ -208,6 +209,28 @@
     const el = h("span", { class: "av-stack" }, ...keys.slice(0, max).map(k => avatar(Data.person(k), size)));
     if (keys.length > max) el.append(h("span", { class: "av-more", text: "+" + (keys.length - max) }));
     return el;
+  }
+
+  /* ---------- shared views of tasks, chats and events (phase 1 fields) ---------- */
+  // real tasks: not templates, not in the recycle bin
+  const liveTasks = () => Data.list("tasks").filter(t => !t.deleted && t.kind !== "template");
+  // tasks I'm responsible for: assignee, co-assignee (participant), or unassigned ones I created
+  const isMyTask = (t, me = Data.me().key) => t.assignee === me || (t.participants || []).includes(me) || (!t.assignee && t.by === me);
+  // chats I'm allowed to see: DMs only for the two people, private groups only for members
+  function canSeeChat(ch, me = Data.me().key) {
+    if (!ch) return false;
+    if (window.ChatAccess?.canSee) return ChatAccess.canSee(ch, me);
+    if (ch.startsWith("dm:")) return ch.slice(3).split("|").includes(me);
+    const c = Data.get("channels", ch);
+    return !c?.private || (c.members || []).includes(me);
+  }
+  // event occurrences between two dates, as the Calendar shows them (recurring, privacy, declined)
+  function eventsBetween(from, to, opts = {}) {
+    if (window.CalendarAPI?.occurrences) return CalendarAPI.occurrences(from, to, opts);
+    const me = Data.me().key;
+    return Data.list("events").filter(e => e.kind !== "room" && (e.calendar !== "personal" || (e.owner || e.by) === me || (e.attendees || {})[me]))
+      .flatMap(e => { const end = e.end || e.date; return e.date <= to && end >= from ? [{ ev: e, date: e.date < from ? from : e.date, start: e.start || "", finish: e.finish || "", allDay: !e.start, declined: (e.attendees || {})[me] === "no" }] : []; })
+      .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
   }
 
   /* ---------- file attachments (stored like Drive files, outside Drive's folders) ---------- */
@@ -369,7 +392,7 @@
   }
 
   Object.assign(Apps, { chooseAvatar, avatar, avatars, colorFor, personPicker, peoplePicker, form, panel, header, tabs, iso, today, addDays, fmtDate, money, currency, empty,
-    pickFiles, attach, openFile, fileChip, fileSize, mentioned, mentionAssist, handleOf });
+    pickFiles, attach, openFile, fileChip, fileSize, mentioned, mentionAssist, handleOf, liveTasks, isMyTask, canSeeChat, eventsBetween });
 
   Apps.init = () => { renderNav(); initBell(); };
   window.Apps = Apps;

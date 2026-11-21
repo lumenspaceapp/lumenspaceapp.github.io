@@ -46,7 +46,7 @@ body[data-app="chat"] .lumi { bottom: 158px; height: min(560px, calc(100vh - 190
 @media (max-width: 760px) {
   .lumi-fab { right: 14px; bottom: calc(14px + env(safe-area-inset-bottom)); width: 48px; height: 48px; border-radius: 16px; }
   .lumi-fab img { width: 48px; height: 48px; }
-  body[data-app="chat"] .lumi-fab { bottom: calc(78px + env(safe-area-inset-bottom)); }
+  body[data-app="chat"] .lumi-fab { bottom: calc(150px + env(safe-area-inset-bottom)); width: 42px; height: 42px; border-radius: 14px; }
   .lumi, body[data-app="chat"] .lumi { inset: 8px 8px calc(8px + env(safe-area-inset-bottom)); width: auto; height: auto; border-radius: 20px; }
   .lumi-input { font-size: 16px; }
 }

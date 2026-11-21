@@ -8,11 +8,11 @@ Checked against the live Bitrix24 portal (all left-menu sections, their tabs and
 |---|---|
 | Direct messages, general chat, reactions, unread counts | ✅ |
 | Video calls / online meetings | ✅ (Jitsi) |
-| Group chats (private, chosen members) | ⬜ |
-| Replies / threads, forward, pin message, delete | ⬜ (edit ✅) |
-| Send files and images in chat | ⬜ |
-| Read receipts, "typing…", search in chats | ⬜ |
-| Channels (broadcast, only admins post) | 🟡 (channels exist, everyone can post) |
+| Group chats (private, chosen members) | ✅ |
+| Replies, forward, pin message, edit, delete | ✅ |
+| Send files and images in chat (attach, paste, drop) | ✅ |
+| Read receipts, "typing…", search in chats | ✅ |
+| Channels and broadcast channels (only admins post) | ✅ |
 | Task chats (a chat inside every task) | ⬜ |
 | CoPilot AI in chat | 🟡 (Lumi AI, once the worker is deployed) |
 | Open Channels (WhatsApp, Telegram, site chat for customers), Telephony, Contact center | 🚫 |
@@ -22,26 +22,26 @@ Checked against the live Bitrix24 portal (all left-menu sections, their tabs and
 | Bitrix24 | Lumen |
 |---|---|
 | Message, Poll, Appreciation, Announcement, likes, comments | ✅ |
-| Event post (creates a calendar event with invitations) | ⬜ |
-| File post | ⬜ |
-| Choose recipients (everyone / departments / people) | ⬜ |
-| "Important" posts with "I've read it" receipts | 🟡 (announcements, no receipts) |
-| @mentions in posts and comments, feed filter by type/author/date | ⬜ |
+| Event post (creates a calendar event with invitations) | ✅ |
+| File post | ✅ |
+| Choose recipients (everyone / departments / people) | ✅ |
+| "Important" posts with "I've read it" receipts | ✅ |
+| @mentions in posts and comments, feed filter by type/author/date | ✅ |
 
 ## 3. Tasks & projects
 | Bitrix24 | Lumen |
 |---|---|
 | My / assigned-by-me / all tasks, deadline board, kanban, list, priority, checklists, comments, projects | ✅ |
-| Planner, Calendar and Gantt views | ⬜ |
-| Roles: participants (co-assignees), observers; "All roles" filter | ⬜ |
-| Subtasks, parent task, related tasks | ⬜ |
-| Tags, reminders, files on tasks | ⬜ |
-| Recurring tasks, task templates | ⬜ |
-| Time planning (start/finish), time tracking per task, estimates | ⬜ |
-| Task needs approval by the creator, status summaries | ⬜ |
+| Planner, Calendar and Gantt views | ✅ |
+| Roles: participants (co-assignees), observers; "All roles" filter | ✅ |
+| Subtasks, parent task, related tasks | ✅ |
+| Tags, reminders, files on tasks | ✅ |
+| Recurring tasks, task templates | ✅ |
+| Time planning (start/finish), time tracking per task, estimates | ✅ |
+| Task needs approval by the creator | ✅ |
 | Flows (intake queues that auto-assign) | ⬜ |
 | Scrum (backlog, sprints, story points, burndown) | ⬜ |
-| Performance %, task reports & analytics, recycle bin | ⬜ |
+| Efficiency %, recycle bin | ✅ (task reports: phase 4) |
 | Link tasks to CRM items | ⬜ |
 | Workgroups / project spaces with their own feed, tasks, calendar, drive, chat, members, privacy | 🟡 (projects are task groups only) |
 | Collabs (projects with external guests) | ⬜ |
@@ -50,10 +50,10 @@ Checked against the live Bitrix24 portal (all left-menu sections, their tabs and
 | Bitrix24 | Lumen |
 |---|---|
 | Month / week / agenda, events, task deadlines and absences overlaid | ✅ |
-| Day view | ⬜ |
-| Invite attendees, accept / decline, free-busy | ⬜ |
-| Recurring events, custom reminders, several calendars (personal / company / project) | 🟡 (10-min reminder only) |
-| Meeting rooms | ⬜ |
+| Day view and week time grid | ✅ |
+| Invite attendees, accept / maybe / decline, busy check | ✅ |
+| Recurring events, custom reminders, company / personal calendars | ✅ |
+| Meeting rooms with double-booking warning | ✅ |
 | Google / Outlook calendar sync | 🚫 for now |
 | Booking: resources, services, day/week schedule, customers, confirmations, late/no-show | ⬜ |
 
@@ -117,7 +117,7 @@ Checked against the live Bitrix24 portal (all left-menu sections, their tabs and
 | Market, developer resources, MCP connections, subscription | 🚫 |
 
 ## Build plan
-1. **Daily work**: Tasks (calendar / Gantt / planner views, participants & observers, subtasks, tags, reminders, recurring, templates, time tracking, approval, files), Calendar (day view, invitations with accept/decline, recurring events, reminders), Messenger (group chats, replies, pins, files, search, read receipts, task chats), Feed (event & file posts, recipients, read receipts, @mentions).
+1. ✅ **Daily work** (shipped 21 Nov 2026): Tasks (calendar / Gantt / planner views, participants & observers, subtasks, tags, reminders, recurring, templates, time tracking, approval, files), Calendar (day view, invitations with accept/decline, recurring events, reminders), Messenger (group chats, replies, pins, files, search, read receipts, task chats), Feed (event & file posts, recipients, read receipts, @mentions).
 2. **Sales**: several pipelines, products & catalog, estimates & invoices with PDF, activities, import/export, custom fields, CRM web forms, Booking, Inventory.
 3. **Company**: work reports, schedules, meetings & briefings, leave approvals, org chart, project spaces (workgroups + Scrum), Lists & RPA processes, access permissions.
 4. **Extras**: analytics dashboards, whiteboards, e-signature, marketing segments, knowledge base, AI helpers.

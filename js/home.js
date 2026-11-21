@@ -20,9 +20,9 @@
     const hero = h("section", { class: "hm-hero glass" });
     function drawHero() {
       const hr = new Date().getHours(), [greet, em] = hr < 5 ? ["Up late", "🌙"] : hr < 12 ? ["Good morning", "☀️"] : hr < 17 ? ["Good afternoon", "🌤️"] : ["Good evening", "🌙"];
-      const m = me(), tasks = Data.list("tasks").filter(t => t.assignee === m.key && t.status !== "done");
+      const m = me(), tasks = Apps.liveTasks().filter(t => Apps.isMyTask(t, m.key) && t.status !== "done");
       const today = tasks.filter(t => t.deadline === T()).length, overdue = tasks.filter(t => t.deadline && t.deadline < T()).length;
-      const online = Data.people().filter(p => p.key !== m.key && p.online).length, events = Data.list("events").filter(e => e.date === T()).length;
+      const online = Data.people().filter(p => p.key !== m.key && p.online).length, events = Apps.eventsBetween(T(), T(), { mine: true }).filter(o => !o.declined).length;
       const bits = [today ? `${today} task${today > 1 ? "s" : ""} due today` : "nothing due today", overdue ? `${overdue} overdue` : null, events ? `${events} event${events > 1 ? "s" : ""}` : null, online ? `${online} teammate${online > 1 ? "s" : ""} online` : null].filter(Boolean);
       const act = (ic, label, fn) => h("button", { class: "hm-qa", onclick: fn }, h("span", { text: ic }), label);
       hero.replaceChildren(
@@ -44,7 +44,7 @@
     let taskTab = "focus";
     cards.tasks = h("div");
     function drawTasks() {
-      const m = me().key, mine = Data.list("tasks").filter(t => t.assignee === m);
+      const m = me().key, mine = Apps.liveTasks().filter(t => Apps.isMyTask(t, m));
       const open = mine.filter(t => t.status !== "done");
       const wk0 = Apps.addDays(T(), -((new Date().getDay() + 6) % 7)), wk1 = Apps.addDays(wk0, 6);
       const weekAll = mine.filter(t => (t.deadline >= wk0 && t.deadline <= wk1) || (t.status === "done" && t.completedAt > new Date(wk0 + "T00:00").getTime()));
@@ -59,7 +59,7 @@
       const rows = list.map((t, i) => {
         const d = Apps.Tasks.due(t);
         return h("div", { class: "hm-task" + (t.status === "done" ? " done" : ""), style: { animationDelay: i * 40 + "ms" } },
-          h("button", { class: "hm-check", title: t.status === "done" ? "Mark not done" : "Mark done", onclick: () => { Data.update("tasks", t.id, { status: t.status === "done" ? "todo" : "done", completedAt: t.status === "done" ? null : Date.now() }); if (t.status !== "done") UI.toast("🎉 Nice!"); } }),
+          h("button", { class: "hm-check", title: t.status === "done" ? "Mark not done" : "Mark done", onclick: () => { const next = t.status === "done" ? "todo" : "done"; if (Apps.Tasks?.setStatus) Apps.Tasks.setStatus(t, next); else Data.update("tasks", t.id, { status: next, completedAt: next === "done" ? Date.now() : null }); if (next === "done") UI.toast("🎉 Nice!"); } }),
           h("span", { class: "hm-tt", text: t.title, onclick: () => Apps.Tasks.openTask(t.id) }),
           t.deadline ? h("span", { class: "dl " + d, text: d === "overdue" ? "Overdue" : t.deadline === T() ? "Today" : Apps.fmtDate(t.deadline) }) : null);
       });
@@ -85,7 +85,7 @@
     function drawAgenda() {
       const t = T(), tm = Apps.addDays(t, 1);
       const items = [
-        ...Data.list("events").filter(e => e.date === t || e.date === tm || (e.end && e.date <= t && e.end >= t)).map(e => ({ day: e.date <= t ? t : e.date, time: e.start || "", title: e.title, color: e.color || "#7c5cff", open: () => Apps.Calendar.editEvent(e) })),
+        ...Apps.eventsBetween(t, tm, { mine: true }).filter(o => !o.declined).map(({ ev: e, date, start }) => ({ day: date, time: start || "", id: e.id, title: e.title, color: e.color || "#7c5cff", open: () => Apps.Calendar.openEvent ? Apps.Calendar.openEvent(e.id, date) : Apps.Calendar.editEvent(e) })),
         ...Data.list("deals").filter(d => (d.close === t || d.close === tm) && !["won", "lost"].includes(d.stage)).map(d => ({ day: d.close, time: "", title: "💼 " + d.title, color: "#f59e0b", open: () => Apps.CRM.openRecord("deals", d.id) })),
       ].sort((a, b) => (a.day + (a.time || "99")).localeCompare(b.day + (b.time || "99")));
       const group = (day, label) => { const its = items.filter(i => i.day === day); return its.length ? [h("div", { class: "hm-day", text: label }), ...its.map(i => h("button", { class: "hm-ev", style: { "--c": i.color }, onclick: i.open }, h("b", { text: i.time || "All day" }), h("span", { text: i.title })))] : []; };
@@ -98,7 +98,7 @@
     let chatWith = null;
     cards.chat = h("div");
     function drawChat() {
-      const m = me().key, msgs = Data.list("chat"), r = lastRead(), ppl = Data.people().filter(p => p.key !== m);
+      const m = me().key, msgs = Data.list("chat").filter(x => !x.deleted && x.kind !== "sys"), r = lastRead(), ppl = Data.people().filter(p => p.key !== m);
       const unread = ch => msgs.filter(x => x.channel === ch && x.by !== m && x.at > (r[ch] || 0)).length;
       const ch = chatWith || "general";
       const chName = ch === "general" ? "# general" : Data.person(ch.slice(3).split("|").find(k => k !== m)).name;
@@ -109,7 +109,7 @@
           h("span", { class: "hm-pp-av" }, Apps.avatar(p, 36), u ? h("i", { text: u }) : null), h("small", { text: String(p.name || "").split(" ")[0] })); }));
       const recent = msgs.filter(x => x.channel === ch).sort((a, b) => a.at - b.at).slice(-5);
       const thread = h("div", { class: "hm-thread" }, ...(recent.length ? recent.map(x => h("div", { class: "hm-msg" + (x.by === m ? " mine" : "") }, Apps.avatar(Data.person(x.by), 22),
-        h("div", { class: "hm-bubble" }, h("small", { text: Data.person(x.by).name.split(" ")[0] + " · " + new Date(x.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }), x.kind === "call" ? h("a", { href: x.url, target: "_blank", rel: "noopener", text: "📹 Join video call" }) : h("span", { text: x.text }))))
+        h("div", { class: "hm-bubble" }, h("small", { text: Data.person(x.by).name.split(" ")[0] + " · " + new Date(x.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }), x.kind === "call" ? h("a", { href: x.url, target: "_blank", rel: "noopener", text: "📹 Join video call" }) : h("span", { text: x.text || ((x.files || []).length ? "📎 " + x.files.map(f => f.name).join(", ") : "") }))))
         : [empty(ch === "general" ? "Say hello to the team 👋" : `Start a conversation with ${chName}`)]));
       const input = h("input", { class: "hm-add", placeholder: `Message ${chName}…` });
       input.onkeydown = e => {
@@ -153,14 +153,14 @@
     cards.updates = h("div");
     function drawUpdates() {
       const m = me().key;
-      const posts = Data.list("feed").sort((a, b) => (b.kind === "announce" && b.pinned) - (a.kind === "announce" && a.pinned) || b.at - a.at).slice(0, 3);
+      const posts = Data.list("feed").filter(p => !window.FeedAPI || FeedAPI.canSee(p)).sort((a, b) => !!b.pinned - !!a.pinned || b.at - a.at).slice(0, 3);
       const notes = Data.list("notifications").filter(n => n.to === m && !n.read).sort((a, b) => b.at - a.at).slice(0, 4);
       cards.updates.replaceChildren(card("hm-updates", "Updates", "📰", link("Feed →", () => Apps.go("feed")),
         ...(notes.length ? [h("div", { class: "hm-day", text: `For you · ${notes.length}` }), ...notes.map(n => h("button", { class: "hm-note", onclick: () => { Data.update("notifications", n.id, { read: true }); if (n.link) location.hash = n.link; } }, h("span", { class: "hm-dot" }), h("span", { html: n.text }), h("small", { text: UI.timeAgo(n.at) })))] : []),
         h("div", { class: "hm-day", text: "From the feed" }),
         ...(posts.length ? posts.map(p => { const liked = (p.likes || []).includes(m); return h("div", { class: "hm-post" + (p.kind === "announce" ? " announce" : "") }, Apps.avatar(Data.person(p.by), 28),
           h("div", { class: "grow" }, h("div", { class: "hm-post-h" }, h("b", { text: Data.person(p.by).name }), h("small", { text: (p.kind === "announce" ? "📣 " : p.kind === "poll" ? "📊 " : "") + UI.timeAgo(p.at) })), h("div", { class: "hm-post-t", text: p.text })),
-          h("button", { class: "hm-like" + (liked ? " on" : ""), onclick: () => Data.update("feed", p.id, { likes: liked ? p.likes.filter(k => k !== m) : [...(p.likes || []), m] }) }, (liked ? "❤️ " : "🤍 ") + ((p.likes || []).length || ""))); })
+          h("button", { class: "hm-like" + (liked ? " on" : ""), onclick: () => Data.arr("feed", p.id, "likes", m, !liked) }, (liked ? "❤️ " : "🤍 ") + ((p.likes || []).length || ""))); })
           : [empty("No posts yet.", h("button", { class: "btn", text: "Write the first post", onclick: () => Apps.go("feed") }))])));
     }
 

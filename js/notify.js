@@ -101,15 +101,16 @@
     msgs.forEach(m => {
       if (!fresh(m) || m.by === me || !m.channel) return;
       const dm = m.channel.startsWith("dm:");
-      if (dm && !m.channel.slice(3).split("|").includes(me)) return; // someone else's DM
+      if (m.deleted || !Apps.canSeeChat(m.channel, me)) return; // someone else's DM or a private group I'm not in
+      const chDoc = dm ? null : Data.get("channels", m.channel), group = chDoc?.kind === "group";
       const mentioned = !dm && handle() && String(m.text || "").toLowerCase().includes("@" + handle());
-      if (!dm && !mentioned && prefs.chat !== "all") return;
+      if (!dm && !group && !mentioned && prefs.chat !== "all") return; // group chats count like DMs
       if (viewing(m.channel)) return;
       const who = Data.person(m.by);
-      const chName = dm ? "" : "#" + ((Data.list("channels").find(c => c.id === m.channel) || {}).name || m.channel);
-      const title = m.kind === "call" ? `📹 ${who.name} started a video call${dm ? "" : " in " + chName}`
+      const chName = dm ? "" : window.ChatAccess?.title ? ChatAccess.title(m.channel) : "#" + ((chDoc || {}).name || m.channel);
+      const title = m.kind === "sys" ? (chName || who.name) : m.kind === "call" ? `📹 ${who.name} started a video call${dm ? "" : " in " + chName}`
         : dm ? who.name : mentioned ? `${who.name} mentioned you in ${chName}` : `${who.name} in ${chName}`;
-      alert({ title, body: m.kind === "call" ? "Tap to join" : String(m.text || "").slice(0, 140), link: "#/app/chat/" + encodeURIComponent(m.channel),
+      alert({ title, body: m.kind === "call" ? "Tap to join" : String(m.text || "").slice(0, 140) || ((m.files || []).length ? "📎 " + m.files.map(f => f.name).join(", ") : ""), link: "#/app/chat/" + encodeURIComponent(m.channel),
         person: who, tag: "chat-" + m.channel, dedupe: "chat|" + m.channel + "|" + m.by });
     });
   }
@@ -126,24 +127,16 @@
     });
   }
 
-  /* reminders: events 10 minutes ahead, and tasks due today (once a day) */
+  /* reminder: tasks due today (once a day) */
   const remKey = () => "lumen-reminded-" + (window.Cloud?.ws?.id || "local");
   const reminded = () => { try { return JSON.parse(localStorage.getItem(remKey())) || {}; } catch { return {}; } };
   const remember = (r, k) => { r[k] = Date.now(); for (const x in r) if (Date.now() - r[x] > 3 * 864e5) delete r[x]; try { localStorage.setItem(remKey(), JSON.stringify(r)); } catch {} };
   function reminders() {
     const today = Apps.today(), now = new Date(), r = reminded();
-    Data.list("events").forEach(ev => {
-      if (ev.date !== today || !/^\d\d:\d\d$/.test(ev.start || "")) return;
-      const [hh, mm] = ev.start.split(":").map(Number), at = new Date(now); at.setHours(hh, mm, 0, 0);
-      const mins = Math.round((at - now) / 60000), k = "ev|" + ev.id + "|" + ev.date + "|" + ev.start;
-      if (mins >= 0 && mins <= 10 && !r[k]) {
-        remember(r, k);
-        alert({ title: `📅 ${ev.title || "Event"} ${mins <= 0 ? "is starting now" : `starts in ${mins} min`}`, body: [ev.start + (ev.finish ? "–" + ev.finish : ""), ev.where].filter(Boolean).join(" · "), link: "#/app/calendar", icon: "📅", tag: "ev-" + ev.id });
-      }
-    });
+    // event reminders are sent by the Calendar app (each event has its own reminder time)
     const me = Data.me().key, dk = "tasks|" + today;
     if (!r[dk] && now.getHours() >= 8 && Data.list("tasks").length) {
-      const mine = Data.list("tasks").filter(t => t.status !== "done" && t.deadline && t.deadline <= today && (t.assignee === me || (!t.assignee && t.by === me)));
+      const mine = Apps.liveTasks().filter(t => t.status !== "done" && t.status !== "review" && t.deadline && t.deadline <= today && Apps.isMyTask(t, me));
       remember(r, dk);
       if (mine.length) {
         const late = mine.filter(t => t.deadline < today).length;

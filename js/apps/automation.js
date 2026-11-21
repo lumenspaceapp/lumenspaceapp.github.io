@@ -43,6 +43,7 @@
   }
   Data.hooks.add((kind, col, after, before) => {
     if (busy || !after) return;          // never trigger on changes made by rules themselves
+    if (col === "tasks" && (after.kind === "template" || after.deleted)) return; // templates and the recycle bin don't count
     if (col === "deals" && kind === "add") run("deal_created", after);
     if (col === "deals" && kind === "update" && before && before.stage !== after.stage) run("deal_stage", after, { stage: after.stage });
     if (col === "leads" && kind === "add") run("lead_created", after);
@@ -52,7 +53,7 @@
   // overdue scan: only the responsible person's device handles each task, so rules fire once
   function scan() {
     const me = Data.me().key, t = Apps.today();
-    Data.list("tasks").filter(x => x.deadline && x.deadline < t && x.status !== "done" && !x.overdueFlag && (x.assignee === me || (!x.assignee && x.by === me)))
+    Apps.liveTasks().filter(x => x.deadline && x.deadline < t && x.status !== "done" && !x.overdueFlag && Apps.isMyTask(x, me))
       .forEach(async x => { busy++; try { await Data.update("tasks", x.id, { overdueFlag: true }); } finally { busy--; } run("task_overdue", x); });
   }
   setInterval(scan, 5 * 60000);

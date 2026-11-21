@@ -19,17 +19,18 @@
     appList.forEach(([k, t, ic]) => { if (!q || has(t)) out.push({ ic, t, d: "App", go: k === "home" ? "#/p/home" : "#/app/" + k, s: q && t.toLowerCase().startsWith(q) ? 4 : 3 }); });
     if (!q) {
       // nothing typed: my open tasks, soonest first
-      Data.list("tasks").filter(t => t.status !== "done" && (t.assignee === me || (!t.assignee && t.by === me)))
+      Apps.liveTasks().filter(t => t.status !== "done" && Apps.isMyTask(t, me))
         .sort((a, b) => (a.deadline || "9999").localeCompare(b.deadline || "9999")).slice(0, 5)
         .forEach(t => out.push({ ic: "✅", t: t.title || "Untitled task", d: t.deadline ? "Due " + Apps.fmtDate(t.deadline) : "My task", go: "#/app/tasks/" + t.id }));
       return out.slice(0, 12);
     }
-    Data.list("tasks").forEach(t => { if (has(t.title, t.desc)) out.push({ ic: t.status === "done" ? "☑️" : "✅", t: t.title || "Untitled task", d: "Task" + (t.deadline ? " · due " + Apps.fmtDate(t.deadline) : ""), go: "#/app/tasks/" + t.id, s: has(t.title) ? 2 : 1 }); });
+    Apps.liveTasks().forEach(t => { if (has(t.title, t.desc, (t.tags || []).join(" "))) out.push({ ic: t.status === "done" ? "☑️" : "✅", t: t.title || "Untitled task", d: "Task" + (t.deadline ? " · due " + Apps.fmtDate(t.deadline) : ""), go: "#/app/tasks/" + t.id, s: has(t.title) ? 2 : 1 }); });
     Data.people().forEach(pp => { if (has(pp.name, pp.email, pp.title, pp.dept)) out.push({ person: pp, t: pp.name, d: [pp.title, pp.dept].filter(Boolean).join(" · ") || pp.email || "Teammate", go: "#/app/company", s: 2 }); });
     [["deals", "💼", "Deal"], ["leads", "🧲", "Lead"], ["contacts", "👤", "Contact"], ["companies", "🏢", "Company"]].forEach(([col, ic, label]) =>
       Data.list(col).forEach(r => { if (has(r.title, r.name, r.company, r.email, r.phone)) out.push({ ic, t: r.title || r.name || label, d: label + (r.company ? " · " + r.company : ""), go: "#/app/crm/" + col, s: 1.5 }); }));
     Data.list("files").forEach(f => { if (has(f.name)) out.push({ ic: f.type === "link" ? "🔗" : "📎", t: f.name, d: "Drive", go: "#/app/drive", s: 1 }); });
-    Data.list("events").forEach(ev => { if (has(ev.title, ev.where)) out.push({ ic: "📅", t: ev.title, d: "Event · " + Apps.fmtDate(ev.date), go: "#/app/calendar", s: 1 }); });
+    Data.list("events").forEach(ev => { if (ev.kind !== "room" && (!window.CalendarAPI?.visible || CalendarAPI.visible(ev)) && has(ev.title, ev.where)) out.push({ ic: "📅", t: ev.title, d: "Event · " + Apps.fmtDate(ev.date), go: "#/app/calendar/" + ev.id, s: 1 }); });
+    Data.list("channels").forEach(c => { if (Apps.canSeeChat(c.id) && has(c.name, c.desc)) out.push({ ic: c.kind === "group" ? "👥" : c.kind === "broadcast" ? "📢" : "#", t: c.name, d: c.kind === "group" ? "Group chat" : "Channel", go: "#/app/chat/" + encodeURIComponent(c.id), s: 1.5 }); });
     return out.sort((a, b) => (b.s || 0) - (a.s || 0)).slice(0, 14);
   }
   function allCommands() {
