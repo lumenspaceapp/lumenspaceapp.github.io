@@ -462,6 +462,7 @@
           ov("deal", d.id, d.close, d.close, "💼 " + (d.title || "Deal"), "#f59e0b", () => Apps.go("crm"));
         });
         Data.list("absences").forEach(a => {
+          if ((a.status || "approved") !== "approved") return; // only approved time off shows
           const e = okDate(a.to) && a.to > a.from ? a.to : a.from;
           if (!okDate(a.from) || a.from > to || e < from || (F.mine && a.who !== m)) return;
           ov("absence", a.id, a.from, e, "🌴 " + Data.person(a.who).name, "#64748b", () => Apps.go("company"));

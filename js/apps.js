@@ -218,7 +218,13 @@
 
   /* ---------- shared views of tasks, chats and events (phase 1 fields) ---------- */
   // real tasks: not templates, not in the recycle bin
-  const liveTasks = () => Data.list("tasks").filter(t => !t.deleted && t.kind !== "template");
+  const liveTasks = () => Data.list("tasks").filter(t => {
+    if (t.deleted || t.kind === "template") return false;
+    // tasks of a secret workgroup I'm not in stay hidden unless I'm involved in the task
+    const p = t.project && window.Apps?.Groups?.canSee && Data.get("projects", t.project);
+    if (p && !Apps.Groups.canSee(p)) { const me = Data.me().key; return t.assignee === me || t.by === me || (t.participants || []).includes(me) || (t.observers || []).includes(me); }
+    return true;
+  });
   // tasks I'm responsible for: assignee, co-assignee (participant), or unassigned ones I created
   const isMyTask = (t, me = Data.me().key) => t.assignee === me || (t.participants || []).includes(me) || (!t.assignee && t.by === me);
   // chats I'm allowed to see: DMs only for the two people, private groups only for members

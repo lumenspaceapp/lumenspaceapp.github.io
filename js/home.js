@@ -75,7 +75,7 @@
       const C = Apps.Company, e = C.today(), s = C.state(e);
       const btn = (label, a, primary) => h("button", { class: "btn" + (primary ? " primary" : ""), text: label, onclick: () => C.clock(a) });
       clockText.textContent = C.hm(C.worked(e));
-      cards.clock.replaceChildren(card("hm-clock " + s, "Workday", "⏱️", link("Report →", () => Apps.go("company", "time")),
+      cards.clock.replaceChildren(card("hm-clock " + s, "Workday", "⏱️", link("Report →", () => Apps.go("company", "worktime")),
         h("div", { class: "hm-clock-body" }, h("div", null, clockText, h("div", { class: "hm-sub", text: s === "off" ? "Not clocked in yet" : s === "working" ? "Working since " + new Date(e.start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : s === "paused" ? "On a break" : "Day finished" })),
           h("div", { class: "hm-clock-btns" }, ...(s === "off" ? [btn("▶ Start day", "start", true)] : s === "working" ? [btn("⏸", "pause"), btn("⏹ End", "end", true)] : s === "paused" ? [btn("▶ Resume", "resume", true)] : [btn("↺ Continue", "reopen")])))));
     }
@@ -129,7 +129,7 @@
     cards.team = h("div");
     function drawTeam() {
       const ppl = Data.people(), m = me().key, t = T(), wk = Apps.addDays(t, 7);
-      const abs = Data.list("absences"), ABS = Apps.Company.ABS;
+      const abs = Data.list("absences").filter(a => (a.status || "approved") === "approved"), ABS = Apps.Company.ABS; // pending/declined requests don't count
       const outToday = abs.filter(a => a.from <= t && (a.to || a.from) >= t);
       const outSoon = abs.filter(a => a.from > t && a.from <= wk);
       const online = ppl.filter(p => p.online && p.key !== m);
@@ -146,14 +146,14 @@
       cards.team.replaceChildren(card("hm-team", "Team today", "👥", link("Directory →", () => Apps.go("company")),
         h("div", { class: "hm-team-stats" }, h("div", null, h("b", { text: ppl.length }), h("small", { text: "members" })), h("div", null, h("b", { text: online.length + (ppl.some(p => p.key === m) ? 1 : 0) }), h("small", { text: "online" })), h("div", null, h("b", { text: outToday.length }), h("small", { text: "out today" }))),
         ...(body.length ? body : [empty(ppl.length > 1 ? "Everyone's in, nobody online right now." : "It's just you here. Invite your team!", ppl.length > 1 ? null : h("button", { class: "btn primary", text: "Invite people", onclick: e => window.Cloud?.share(e.currentTarget) }))]),
-        h("button", { class: "hm-link", text: "+ Request time off", onclick: () => Apps.go("company", "absence") })));
+        h("button", { class: "hm-link", text: "+ Request time off", onclick: () => Apps.Company.requestTimeOff ? Apps.Company.requestTimeOff() : Apps.go("company", "requests") })));
     }
 
     /* ---------- updates: feed + notifications ---------- */
     cards.updates = h("div");
     function drawUpdates() {
       const m = me().key;
-      const posts = Data.list("feed").filter(p => !window.FeedAPI || FeedAPI.canSee(p)).sort((a, b) => !!b.pinned - !!a.pinned || b.at - a.at).slice(0, 3);
+      const posts = Data.list("feed").filter(p => !p.group && (!window.FeedAPI || FeedAPI.canSee(p))).sort((a, b) => !!b.pinned - !!a.pinned || b.at - a.at).slice(0, 3);
       const notes = Data.list("notifications").filter(n => n.to === m && !n.read).sort((a, b) => b.at - a.at).slice(0, 4);
       cards.updates.replaceChildren(card("hm-updates", "Updates", "📰", link("Feed →", () => Apps.go("feed")),
         ...(notes.length ? [h("div", { class: "hm-day", text: `For you · ${notes.length}` }), ...notes.map(n => h("button", { class: "hm-note", onclick: () => { Data.update("notifications", n.id, { read: true }); if (n.link) location.hash = n.link; } }, h("span", { class: "hm-dot" }), h("span", { html: n.text }), h("small", { text: UI.timeAgo(n.at) })))] : []),

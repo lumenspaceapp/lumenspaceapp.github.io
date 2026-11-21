@@ -304,7 +304,7 @@
     const area = b.actual.length > 1 ? `<polygon class="area" points="${x(0)},${y(0)} ${pts} ${x(last)},${y(0)}"/>` : "";
     const ti = b.days.indexOf(T());
     const today = ti >= 0 ? `<line class="today" x1="${x(ti)}" x2="${x(ti)}" y1="${Tp}" y2="${H - B}"/>` : "";
-    const svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Burndown chart">${grid}${today}
+    const svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Burndown chart">${grid}${today}
       <line class="ideal" x1="${x(0)}" y1="${y(b.total)}" x2="${x(n)}" y2="${y(0)}"/>${area}
       ${b.actual.length ? `<polyline class="actual" points="${pts}"/><circle class="dot" cx="${x(last)}" cy="${y(b.actual[last])}" r="4.5"/>` : ""}${xl}</svg>`;
     return h("div", { class: "gr-chart" + (small ? " small" : "") }, h("div", { class: "gr-chart-svg", html: svg }),
@@ -484,7 +484,7 @@
       paintHead(); paintTabs();
       if (!mounted || [canRead(p), p.type, tab].join("|") !== gateKey) mount(); else later();
     }
-    const offs = [Data.on("projects", refresh), Data.on("people", () => { if (g()) { paintHead(); later(); } })];
+    const offs = [Data.on("projects", refresh), Data.on("people", () => { if (canSee(g())) { paintHead(); later(); } })];
     return () => { offs.forEach(f => f()); subOffs.forEach(f => f()); clearTimeout(laterT); };
   }
 

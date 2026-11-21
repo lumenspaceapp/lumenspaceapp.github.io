@@ -29,7 +29,10 @@
   const inAudience = (a, person) => isAll(a) || toList(a.people).includes(person.key) || (!!person.dept && toList(a.depts).includes(person.dept));
   const recipients = a => Data.people().filter(p => inAudience(a, p)).map(p => p.key);
   const self = () => { const me = Data.me(); return Data.people().find(p => p.key === me.key) || { ...me, dept: "" }; };
-  const canSee = (p, me) => p.by === me.key || inAudience(p.audience, me) || toList(p.to).includes(me.key);
+  // workgroup posts (p.group = projects id) are visible to that group's members only
+  const inGroup = (p, me) => { const g = Data.get("projects", p.group); if (!g) return false; return window.Apps?.Groups?.isMember ? Apps.Groups.isMember(g, me.key) : !Array.isArray(g.members) || g.members.includes(me.key) || g.owner === me.key; };
+  const groupName = id => (Data.get("projects", id) || {}).name || "a workgroup";
+  const canSee = (p, me) => p.group ? inGroup(p, me) : p.by === me.key || inAudience(p.audience, me) || toList(p.to).includes(me.key);
   const depts = () => [...new Set(Data.people().map(p => p.dept).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   function audienceLabel(a) {
     if (isAll(a)) return "All employees";
@@ -267,6 +270,11 @@
     const rangeBtn = h("button", { type: "button", class: "chip-btn", onclick: () => pickMenu(rangeBtn, RANGES, "range") });
     const typeBtn = h("button", { type: "button", class: "chip-btn", onclick: () => pickMenu(typeBtn, TYPES, "type") });
     const clearBtn = h("button", { type: "button", class: "fd-clear", text: "Clear filters", onclick: () => { resetFilters(); draw(); } });
+    // group posts stay in their workgroup; members can choose to see them here too
+    let showGroups = false; try { showGroups = localStorage.getItem("lumen-feed-groups") === "1"; } catch {}
+    const groupsBtn = h("button", { type: "button", class: "chip-btn", title: "Show posts from your workgroups", text: "👥 Group posts", style: { display: "none" },
+      onclick: () => { showGroups = !showGroups; try { localStorage.setItem("lumen-feed-groups", showGroups ? "1" : "0"); } catch {} groupsBtn.classList.toggle("on", showGroups); draw(); } });
+    groupsBtn.classList.toggle("on", showGroups);
     const filtersOn = () => !!(flt.q.trim() || flt.author || flt.range !== "all" || flt.type !== "any");
     function paintFilters() {
       authorBtn.replaceChildren(...(flt.author ? [Apps.avatar(Data.person(flt.author), 18), h("span", { text: Data.person(flt.author).name }), h("span", { class: "fd-x", title: "Anyone", text: "×" })] : [h("span", { text: "👤 Anyone" })]));
@@ -280,7 +288,7 @@
       tab = "all"; [...tabsEl.children].forEach((b, i) => b.classList.toggle("on", i === 0));
     }
     paintFilters();
-    const filterBar = h("div", { class: "fd-filters glass" }, search, authorBtn, rangeBtn, typeBtn, clearBtn);
+    const filterBar = h("div", { class: "fd-filters glass" }, search, authorBtn, rangeBtn, typeBtn, groupsBtn, clearBtn);
 
     const list = h("div", { class: "feed-list" });
     root.append(Apps.header("Activity Feed", "📰", "News and updates from your workspace"), composer, tabsEl, filterBar, list);
@@ -305,7 +313,10 @@
         ev ? [ev.title, ev.date, ev.end, ev.allDay, ev.start, ev.finish, ev.where, ev.attendees] : 0, atts.map(a => !!Data.get("files", a.id)), expanded.has(p.id)]);
     }
     function draw() {
-      const me = self(), all = Data.list("feed").filter(p => canSee(p, me));
+      const me = self(), vis = Data.list("feed").filter(p => canSee(p, me));
+      const all = vis.filter(p => !p.group || showGroups || p.id === focusId);
+      if (Data.list("feed").some(p => p.group)) watch("projects");
+      groupsBtn.style.display = vis.some(p => p.group) ? "" : "none";
       if (all.some(p => p.kind === "event")) watch("events");
       if (all.some(p => toList(p.files).length || toList(p.comments).some(c => toList(c.files).length))) watch("files");
       const unread = all.filter(p => unreadImportant(p, me)).length;
@@ -468,7 +479,8 @@
           { sep: true },
           { label: "Delete post", icon: "trash", danger: true, onClick: () => deletePost(p) }] : []),
       ];
-      const sub = [h("span", { class: "fd-tol" }, "To: ", h("b", { text: audienceLabel(p.audience) })), " · ", h("span", { class: "fd-time", dataset: { at: p.at }, text: UI.timeAgo(p.at) }),
+      const sub = [p.group ? h("span", { class: "fd-tol" }, "in ", h("a", { href: "#/app/groups/" + encodeURIComponent(p.group) + "/feed", text: groupName(p.group), style: { color: "var(--accent)", fontWeight: 600, textDecoration: "none" } }))
+        : h("span", { class: "fd-tol" }, "To: ", h("b", { text: audienceLabel(p.audience) })), " · ", h("span", { class: "fd-time", dataset: { at: p.at }, text: UI.timeAgo(p.at) }),
         p.kind === "poll" ? " · Poll" : p.kind === "event" ? " · Event" : null, p.edited ? h("span", { class: "fd-edited", text: " · edited" }) : null];
       const cls = "feed-post glass" + (p.kind === "announce" ? " announce" : "") + (p.pinned ? " pinned" : "") + (unreadImportant(p, meP) ? " unread-imp" : "");
       return h("article", { class: cls, dataset: { id: p.id }, style: { animationDelay: firstDraw ? Math.min(i * 40, 300) + "ms" : "0ms" } },

@@ -17,10 +17,14 @@
   /* ---------- who sees what ---------- */
   // templates and deleted tasks never show up in normal lists
   const live = t => !!t && !t.deleted && t.kind !== "template";
-  const liveTasks = () => Apps.liveTasks ? Apps.liveTasks() : Data.list("tasks").filter(live);
   const isDoing = (t, k = meKey()) => t.assignee === k || (t.participants || []).includes(k);
   const isMine = (t, k = meKey()) => Apps.isMyTask ? Apps.isMyTask(t, k) : isDoing(t, k) || (!t.assignee && t.by === k);
   const involved = (t, k = meKey()) => isDoing(t, k) || t.by === k || (t.observers || []).includes(k);
+  // workgroups: projects (groups) I can see; tasks of secret groups only for members and the task's own people
+  const seeProject = p => !p || !Apps.Groups?.canSee || Apps.Groups.canSee(p);
+  const seeTask = t => { const p = t.project && Data.get("projects", t.project); return !p || seeProject(p) || involved(t); };
+  const visProjects = (keep = "") => Data.list("projects").filter(p => p.id === keep || (seeProject(p) && !p.archived));
+  const liveTasks = () => (Apps.liveTasks ? Apps.liveTasks() : Data.list("tasks").filter(live)).filter(seeTask);
   // everyone who follows a task (minus me): assignee, creator, participants, observers
   const watchers = t => [...new Set([t.assignee, t.by, ...(t.participants || []), ...(t.observers || [])])].filter(k => k && k !== meKey());
   const tell = (keys, html, t, preview) => [...new Set(keys)].filter(k => k && k !== meKey()).forEach(k => Data.notify(k, html, LINK(t.id), preview));
@@ -169,7 +173,7 @@
 
   /* ---------- new task ---------- */
   async function newTask(preset = {}, fromTpl = false) {
-    const me = Data.me(), projects = Data.list("projects");
+    const me = Data.me(), projects = visProjects(preset.project || "");
     const rep = preset.repeat && typeof preset.repeat === "object" ? preset.repeat : { freq: preset.repeat || "", until: "" };
     const v = await Apps.form(fromTpl ? "New task from template" : preset.parentId ? "New subtask" : "New task", [
       { key: "title", label: "Task", required: true, placeholder: "What needs to be done?" },
@@ -195,6 +199,8 @@
       needsApproval: !!v.needsApproval, repeat: v.repeat ? { freq: v.repeat, until: rep.until || "" } : null,
       estimate: Math.round((+v.estH || 0) * 60), timeSpent: 0, checklist: (v.checklist || []).map(c => ({ id: c.id || Data.uid(), t: c.t, done: false })),
       comments: [], files: [], related: [],
+      // Scrum fields passed in by Workgroups (sprint, epic, story points) are kept
+      ...(v.sprint ? { sprint: v.sprint } : {}), ...(v.epic ? { epic: v.epic } : {}), ...(+v.points ? { points: +v.points } : {}), ...(typeof v.rank === "number" ? { rank: v.rank } : {}),
     };
     const id = await Data.add("tasks", doc);
     const who = `<b>${esc(me.name)}</b>`, nm = `“${esc(doc.title)}”`, pv = [doc.deadline ? "Due " + Apps.fmtDate(doc.deadline) : "", doc.desc].filter(Boolean).join(" · ");
@@ -297,6 +303,7 @@
   /* ---------- task detail slider ---------- */
   function openTask(id) {
     const t0 = Data.get("tasks", id); if (!t0 || t0.kind === "template") return UI.toast("Task not found");
+    if (!seeTask(t0)) return UI.toast("🕶️ This task belongs to a private workgroup");
     const body = h("div", { class: "task-detail tk-detail" });
     const menuBtn = h("button", { class: "icon-btn", title: "More actions", html: UI.icon("dots") });
     const p = Apps.panel("Task", body, [menuBtn]);
@@ -369,8 +376,17 @@
       const dateIn = (val, onSet) => { const i = h("input", { type: "date", class: "chip-in", value: val || "" }); i.onchange = () => onSet(i.value); return i; };
       const pri = h("select", { class: "chip-in" }, ...Object.entries(PRI).map(([k, [i, l]]) => h("option", { value: k, selected: (t.priority || "normal") === k }, (i ? i + " " : "") + l)));
       pri.onchange = () => set({ priority: pri.value });
-      const proj = h("select", { class: "chip-in" }, h("option", { value: "" }, "No project"), ...Data.list("projects").map(pr => h("option", { value: pr.id, selected: t.project === pr.id }, pr.name)));
+      const proj = h("select", { class: "chip-in" }, h("option", { value: "" }, "No project"), ...visProjects(t.project || "").map(pr => h("option", { value: pr.id, selected: t.project === pr.id }, pr.name)));
       proj.onchange = () => set({ project: proj.value });
+      // Scrum workgroups: story points, sprint and epic
+      const grp = t.project && Data.get("projects", t.project), scrumRows = [];
+      if (grp && grp.type === "scrum") {
+        const sel = (opts, val, field, num) => { const s = h("select", { class: "chip-in" }, ...opts.map(([k, l]) => h("option", { value: k, selected: String(val) === String(k) }, l))); s.onchange = () => set({ [field]: num ? +s.value : s.value }); return s; };
+        scrumRows.push(
+          h("span", { text: "Story points" }), sel([0, 1, 2, 3, 5, 8, 13].map(n => [n, n ? String(n) : "–"]), +t.points || 0, "points", true),
+          h("span", { text: "Sprint" }), sel([["", "Backlog"], ...(grp.sprints || []).filter(s => s.status !== "done" || s.id === t.sprint).map(s => [s.id, s.name + (s.status === "active" ? " (active)" : s.status === "done" ? " (done)" : "")])], t.sprint || "", "sprint"),
+          h("span", { text: "Epic" }), sel([["", "No epic"], ...(grp.epics || []).map(e => [e.id, e.name])], t.epic || "", "epic"));
+      }
       const estH = h("input", { type: "number", min: 0, class: "chip-in tk-num", value: Math.floor(est / 60) || "", placeholder: "0" });
       const estM = h("input", { type: "number", min: 0, max: 59, class: "chip-in tk-num", value: est % 60 || "", placeholder: "0" });
       estH.onchange = estM.onchange = () => { const v = (+estH.value || 0) * 60 + (+estM.value || 0); if (v !== est) set({ estimate: v }); };
@@ -399,7 +415,7 @@
         h("span", { text: "Deadline" }), h("span", { class: "td-dl " + due(t) }, dateIn(t.deadline, v => set({ deadline: v })), due(t) === "overdue" ? h("b", { text: " Overdue" }) : null),
         h("span", { text: "Estimate" }), h("div", { class: "tk-v" }, estH, h("small", { text: "h" }), estM, h("small", { text: "min" })),
         h("span", { text: "Priority" }), pri,
-        h("span", { text: "Project" }), proj,
+        h("span", { text: "Project" }), proj, ...scrumRows,
         h("span", { text: "Repeat" }), h("div", { class: "tk-v" }, rep, t.repeat && t.repeat.freq ? h("small", { text: "until" }) : null,
           t.repeat && t.repeat.freq ? dateIn(t.repeat.until, v => set({ repeat: { freq: t.repeat.freq, until: v } })) : null),
         h("span", { text: "Reminder" }), h("div", { class: "tk-v" }, remEl),
@@ -550,7 +566,7 @@
 
     function draw() {
       SUBS = subCounts();
-      const projects = Data.list("projects"), tags = allTags();
+      const projects = visProjects(project), tags = allTags();
       projSel.replaceChildren(h("option", { value: "" }, "All projects"), ...projects.map(p => h("option", { value: p.id, selected: project === p.id }, p.name)));
       if (tag && !tags.some(x => x.toLowerCase() === tag.toLowerCase())) tags.push(tag);
       tagSel.replaceChildren(h("option", { value: "" }, "All tags"), ...tags.map(x => h("option", { value: x, selected: tag.toLowerCase() === x.toLowerCase() }, "#" + x)));
@@ -823,22 +839,26 @@
 
     /* projects */
     function projectsView() {
-      const ps = Data.list("projects"), tasks = liveTasks();
+      const ps = visProjects(), tasks = liveTasks();
       if (!ps.length) return Apps.empty("📁", "Group related tasks into projects.", h("button", { class: "btn primary", text: "+ Create project", onclick: newProject }));
       return h("div", { class: "proj-grid" }, ...ps.map((p, i) => {
         const mine = tasks.filter(t => t.project === p.id), d = mine.filter(t => t.status === "done").length;
         return h("div", { class: "proj-card glass", style: { "--pc": p.color, animationDelay: i * 50 + "ms" }, onclick: () => { project = p.id; tab = "all"; root.querySelectorAll(".app-tabs button")[2].click(); } },
-          h("div", { class: "pc-top" }, h("span", { class: "pc-dot" }), h("b", { text: p.name }), h("button", { class: "icon-btn xs", html: UI.icon("dots"), onclick: e => { e.stopPropagation(); editProject(p); } })),
+          h("div", { class: "pc-top" }, p.avatar ? h("span", { text: p.avatar }) : h("span", { class: "pc-dot" }), h("b", { text: p.name }),
+            Apps.Groups ? h("button", { class: "icon-btn xs", title: "Open the workgroup space", text: "↗", onclick: e => { e.stopPropagation(); Apps.Groups.open(p.id); } }) : null,
+            !Apps.Groups?.canManage || Apps.Groups.canManage(p) ? h("button", { class: "icon-btn xs", html: UI.icon("dots"), onclick: e => { e.stopPropagation(); editProject(p); } }) : null),
           h("div", { class: "pc-desc", text: p.desc || "No description" }),
           h("div", { class: "progress" }, h("span", { style: { width: (mine.length ? d / mine.length * 100 : 0) + "%" } })),
           h("div", { class: "pc-foot", text: `${d}/${mine.length} tasks done` }));
       }));
     }
     async function newProject() {
+      if (Apps.Groups?.create) return Apps.Groups.create({ type: "project" }); // projects are workgroups now
       const v = await Apps.form("New project", [{ key: "name", label: "Project name", required: true }, { key: "desc", label: "Description", type: "textarea", rows: 2 }, { key: "color", label: "Colour", type: "color" }]);
       if (v) { await Data.add("projects", v); UI.toast("📁 Project created"); draw(); }
     }
     async function editProject(p) {
+      if (Apps.Groups?.edit) return Apps.Groups.edit(p);
       const v = await Apps.form("Edit project", [{ key: "name", label: "Project name", required: true }, { key: "desc", label: "Description", type: "textarea", rows: 2 }, { key: "color", label: "Colour", type: "color" }], p,
         { onDelete: () => Data.remove("projects", p.id) });
       if (v) Data.update("projects", p.id, { name: v.name, desc: v.desc, color: v.color });
