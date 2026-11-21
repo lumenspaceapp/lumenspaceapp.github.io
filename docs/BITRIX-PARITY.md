@@ -113,7 +113,7 @@ Checked against the live Bitrix24 portal (all left-menu sections, their tabs and
 | Bitrix24 | Lumen |
 |---|---|
 | Notifications, search, themes, invite users, mobile | ✅ |
-| Access permissions (owner / admin / member / guest, per-app view and edit rights) | ✅ (enforced in the app, not yet by the database) |
+| Access permissions (Owner + levels 1–4: admin, manager, member, guest; per-app view and edit rights) | ✅ (who can view each app is enforced by the database; edit rights in the app) |
 | Market, developer resources, MCP connections, subscription | 🚫 |
 
 ## Build plan
