@@ -131,3 +131,15 @@ All other phase 1 rules still apply (no git, no browser, no other files, syntax 
 - Knowledge base: `js/apps/kb.js`, `css/kb.css`.
 - Drive: `js/apps/drive.js`, `css/drive.css`.
 - AI: `js/ai.js`, `css/ai.css`, `worker/src/index.js` (add an assist endpoint) and **small targeted hooks** (an AI button or two, guarded by `Apps.AI?.available()`) in `js/apps/tasks.js`, `js/apps/feed.js`, `js/apps/crm.js`, `js/apps/chat.js`, `js/apps/company.js` — no one else edits those files in phase 4.
+
+---
+
+# Settings (Bitrix24 parity)
+`js/prefs.js` (loaded right after js/apps.js) is the single source for settings — read it first. Workspace settings live in `settings/workspace` (admins edit; schema and defaults in prefs.js), personal preferences in `people/<me>.prefs`. Helpers: `Prefs.ws()`, `Prefs.get("hours.weekStart")`, `Prefs.set(patch)`, `Prefs.tool(app, feature?)` (default on), `Prefs.me()`, `Prefs.setMe(patch)`, `Prefs.on(fn)`. Company details (requisites, bank) stay in `settings/company` (also used by invoices).
+Feature keys for `Prefs.tool(app, feature)`:
+- tasks: projects, scrum, efficiency, templates, gantt, timetracking
+- crm: products, estimates, invoices, forms, smart, analytics
+- company: structure, absence, worktime, schedules, reports, meetings
+- automation: rules, approvals, rpa, lists
+- chat: calls; feed: polls, appreciation; drive: versions; calendar: rooms
+Apps whose `tools[app].on === false` disappear from the sidebar and show "This tool is switched off" (owner/admins see a link to Settings → Tools).
