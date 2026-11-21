@@ -167,6 +167,7 @@
     /* ---------- pipeline (only when the CRM is in use) ---------- */
     cards.crm = h("div");
     function drawCrm() {
+      if (Apps.can && !Apps.can("crm", "view")) return cards.crm.replaceChildren(); // no CRM access: no pipeline card
       const C = Apps.CRM, deals = C?.live ? C.live("deals") : Data.list("deals").filter(d => !d.deleted); if (!deals.length) return cards.crm.replaceChildren();
       const sem = d => C?.sem ? C.sem(d) : d.stage === "won" ? "won" : d.stage === "lost" ? "lost" : "process"; // won/lost stages differ per pipeline
       const open = deals.filter(d => sem(d) === "process"), month = new Date(); month.setDate(1);

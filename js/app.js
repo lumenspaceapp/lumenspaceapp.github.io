@@ -187,13 +187,14 @@
       h("div", { style: { display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" } }, nameIn,
         h("button", { class: "btn primary", text: "Change avatar", onclick: async () => { await Apps.chooseAvatar(); paintAv(); } })));
     const motion = h("span", { class: "switch" + (s.motion ? " on" : ""), style: { cursor: "pointer" }, onclick: () => { s.motion = !s.motion; motion.classList.toggle("on", s.motion); applySettings(); Store.save(); } });
-    const ws = h("input", { class: "menu-input", value: Store.getName(), style: { width: "200px", margin: 0 } });
+    const ws = h("input", { class: "menu-input", value: Store.getName(), style: { width: "200px", margin: 0 }, disabled: !!(window.Apps?.can && !Apps.can("settings", "edit")), title: window.Apps?.can && !Apps.can("settings", "edit") ? "Only admins can rename the workspace" : "" });
     ws.addEventListener("input", () => { Store.setName(ws.value || "My Workspace"); Sidebar.render(); });
     const file = h("input", { type: "file", accept: ".json", style: { display: "none" } });
     file.addEventListener("change", () => { const f = file.files[0]; if (!f) return; f.text().then(t => { try { Store.importAll(t); m.close(); boot(); UI.toast("Workspace imported"); } catch (e) { UI.toast("Import failed: " + e.message); } }); });
     const body = h("div", null,
       profile,
       row("Workspace name", "Shown at the top of the sidebar", ws),
+      window.Cloud?.ws && window.Apps?.Access && Apps.isAdmin?.() ? row("Access & roles", "Who is an admin, member or guest, and what each role can open", h("button", { class: "btn", text: "Manage access", onclick: () => { m.close(); Apps.Access.open(); } })) : null,
       row("Appearance", "Light, dark or follow your system", seg("theme", [["light", "Light"], ["dark", "Dark"], ["system", "System"]])),
       row("Accent color", "Used for highlights, checkboxes and buttons", accents),
       row("Glass blur", "How frosted the panels look", h("span", { class: "set-ctl" }, blur, blurVal)),

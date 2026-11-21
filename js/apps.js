@@ -16,6 +16,11 @@
     v.innerHTML = "";
     const def = reg[name];
     if (!def) { v.append(h("div", { class: "big-empty" }, h("div", { text: "🧩" }), "Unknown app")); return; }
+    // access roles (js/access.js): apps my role can't view show a friendly notice instead
+    if (name !== "home" && Apps.can && !Apps.can(name, "view")) {
+      v.append(Apps.Access?.denied ? Apps.Access.denied(def) : h("div", { class: "big-empty acc-denied" }, h("div", { text: "🔒" }), `You don't have access to ${def.title}. Ask an admin.`));
+      document.title = def.title + " · Lumen"; renderNav(); return;
+    }
     const root = h("div", { class: "app app-" + name });
     v.append(root);
     v.classList.remove("enter"); void v.offsetWidth; v.classList.add("enter");
@@ -57,7 +62,7 @@
     }
     box.innerHTML = "";
     order.forEach(n => {
-      const d = reg[n]; if (d.hidden) return;
+      const d = reg[n]; if (d.hidden || (Apps.can && !Apps.can(n, "view"))) return; // hide apps my role can't view
       box.append(h("div", { class: "tree-row" + (current === n ? " active" : ""), dataset: { app: n }, onclick: () => { Apps.go(n); if (innerWidth < 760) App.toggleSidebar(false); } },
         h("span", { class: "p-icon", text: d.icon }), h("span", { class: "p-title", text: d.title }), h("span", { class: "count", text: badges[n] || "" })));
     });

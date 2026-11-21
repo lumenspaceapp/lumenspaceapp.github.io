@@ -8,17 +8,31 @@ service cloud.firestore {
     }
 
     match /workspaces/{ws} {
+      // workspace doc helpers for the update rule (access roles)
+      function wsAdmin(d) { return d.get('roles', {}).get(myEmail(), 'member') == 'admin'; }
+      // with ownerEmail known: the owner must stay a member and keep their role entry;
+      // without it (older workspaces, until the owner opens them once): admins can't change members at all
+      function ownerKept(before, after) {
+        let oe = before.get('ownerEmail', '');
+        return (oe != '' && oe in after.members
+                && after.get('roles', {}).get(oe, '') == before.get('roles', {}).get(oe, ''))
+          || (oe == '' && after.members == before.members);
+      }
       // list/read only workspaces you were invited to
       allow read: if signedIn() && myEmail() in resource.data.members;
       // create a workspace you own and belong to
       allow create: if signedIn()
         && request.resource.data.owner == request.auth.uid
         && myEmail() in request.resource.data.members;
-      // members can rename / reorder; only the owner can change members or ownership
+      // access roles: roles = { email: 'admin' | 'member' | 'guest' } (missing = member), perms = { app: { view, edit } }
+      // the owner can change anything; admins can also change members, roles and perms (never owner / ownerEmail,
+      // and the owner stays a member with an unchanged role entry); everyone else can rename / reorder only
       allow update: if signedIn() && myEmail() in resource.data.members
         && (resource.data.owner == request.auth.uid
-            || (request.resource.data.members == resource.data.members
-                && request.resource.data.owner == resource.data.owner));
+            || (wsAdmin(resource.data)
+                && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['owner', 'ownerEmail'])
+                && ownerKept(resource.data, request.resource.data))
+            || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['members', 'owner', 'ownerEmail', 'roles', 'perms']));
       allow delete: if signedIn() && resource.data.owner == request.auth.uid;
 
       match /pages/{page} {

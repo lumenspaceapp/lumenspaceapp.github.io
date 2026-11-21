@@ -162,10 +162,13 @@ async function open(id, pageId) {
     setSaved("Synced"); heartbeat(); App.onWorkspaceChange(pageId);
     UI.toast(`👥 ${ws.name}`);
   };
+  const myRef = wsRef; let ownerEmailAsked = false;
   unsubs.push(fb.onSnapshot(wsRef, snap => {
     if (!snap.exists()) { UI.toast("That shared workspace no longer exists"); return leave(true); }
     const d = snap.data();
-    Object.assign(ws, { name: d.name, icon: d.icon || "", members: d.members || [], owner: d.owner, ownerEmail: d.ownerEmail });
+    Object.assign(ws, { name: d.name, icon: d.icon || "", members: d.members || [], owner: d.owner, ownerEmail: d.ownerEmail, roles: d.roles || {}, perms: d.perms || {} });
+    // older workspaces don't store the owner's email (access roles need it): the owner adds it, only they may write it
+    if (!d.ownerEmail && !ownerEmailAsked && Cloud.user && d.owner === Cloud.user.uid) { ownerEmailAsked = true; fb.updateDoc(myRef, { ownerEmail: Cloud.user.email.toLowerCase() }).catch(e => console.warn(e)); }
     syncedName = d.name;
     const r = J(d.root || []);
     if (r !== syncedRoot) {
@@ -173,7 +176,8 @@ async function open(id, pageId) {
       syncedRoot = r;
     }
     wsLoaded = true;
-    if (activated) App.remoteUpdate({ tree: true }); else activate();
+    if (activated) { App.remoteUpdate({ tree: true }); window.Apps?.Access?.changed(); } else activate(); // roles / perms changed live
+
   }, e => { UI.toast(e.code === "permission-denied" ? `No access. Ask the owner to invite ${Cloud.user.email}` : "Sync error: " + e.message); leave(true); }));
 
   unsubs.push(fb.onSnapshot(pagesCol, snap => {
@@ -260,7 +264,7 @@ async function invite(email) {
   email = email.trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return UI.toast("Enter a valid email address");
   try { await fb.updateDoc(wsRef, { members: fb.arrayUnion(email) }); }
-  catch (e) { UI.toast(e.code === "permission-denied" ? "Only the owner can invite people" : e.message); return false; }
+  catch (e) { UI.toast(e.code === "permission-denied" ? "Only the owner and admins can invite people" : e.message); return false; }
   await sendInvite(email);
   return true;
 }
@@ -292,8 +296,17 @@ function sendInviteDialog(email, why) {
   m.el.style.width = "480px";
 }
 async function removeMember(email) {
-  try { await fb.updateDoc(wsRef, { members: fb.arrayRemove(email) }); UI.toast(`Removed ${email}`); } catch (e) { UI.toast(e.message); }
+  // their role goes with them (FieldPath: emails contain dots)
+  const more = Cloud.ws?.roles && email in Cloud.ws.roles ? [new fb.FieldPath("roles", email), fb.deleteField()] : [];
+  try { await fb.updateDoc(wsRef, "members", fb.arrayRemove(email), ...more); UI.toast(`Removed ${email}`); }
+  catch (e) { UI.toast(e.code === "permission-denied" ? "Only the owner and admins can remove people" : e.message); }
 }
+/* access roles (js/access.js): written field by field so two admins editing at once don't overwrite each other */
+const access = {
+  setRole: (email, role) => fb.updateDoc(wsRef, new fb.FieldPath("roles", email), role),
+  setPerm: (area, rule) => fb.updateDoc(wsRef, new fb.FieldPath("perms", area), { view: rule.view, edit: rule.edit }),
+  resetPerms: () => fb.updateDoc(wsRef, { perms: fb.deleteField() }),
+};
 async function deleteWorkspace() {
   const ws = Cloud.ws;
   if (!(await UI.confirm(`Permanently delete “${ws.name}” and all of its pages for every member? This can't be undone.`))) return;
@@ -332,6 +345,7 @@ Cloud.workspaceMenuItems = () => {
   const items = [{ section: "Workspaces" },
     { label: "This browser (private)", iconHtml: "<span>💻</span>", kbd: Cloud.ws ? "" : "✓", onClick: () => Cloud.ws && leave() }];
   Cloud.workspaces.forEach(w => items.push({ label: w.name, iconHtml: "<span>👥</span>", kbd: Cloud.ws?.id === w.id ? "✓" : "", onClick: () => Cloud.ws?.id !== w.id && open(w.id) }));
+  if (Cloud.ws && window.Apps?.Access && Apps.isAdmin()) items.push({ label: "Access & roles…", icon: "lock", onClick: () => Apps.Access.open() });
   items.push({ sep: true });
   if (!Cloud.configured) items.push({ label: "Set up sharing…", icon: "link", onClick: setupModal });
   else if (!Cloud.user) items.push({ label: "Sign in with Google", icon: "smile", onClick: signIn });
@@ -360,28 +374,37 @@ Cloud.share = async anchor => {
       ...Cloud.workspaces.map(w => ({ label: w.name, iconHtml: "<span>👥</span>", onClick: () => open(w.id) })),
       { sep: true }, { label: "New shared workspace…", icon: "plus", onClick: createDialog }], { align: "end" });
   }
-  const ws = Cloud.ws, me = Cloud.user, isOwner = ws.owner === me.uid;
+  const ws = Cloud.ws, me = Cloud.user, isOwner = ws.owner === me.uid, myEmail = me.email.toLowerCase();
+  // access roles (js/access.js): admins may invite and remove people too, once the owner's email is known
+  const A = window.Apps?.Access ? Apps : null, isAdmin = isOwner || !!A?.isAdmin();
+  const canManage = isOwner || (isAdmin && !!ws.ownerEmail);
+  const roleOf = m => A ? Apps.role(m) : m === ws.ownerEmail ? "owner" : "member";
   const base = location.href.split("#")[0];
   const items = [{ section: `👥 ${ws.name} · ${ws.members.length} member${ws.members.length === 1 ? "" : "s"}` }];
-  if (isOwner) {
+  if (canManage) {
     const inp = h("input", { class: "menu-input", placeholder: "Friend's Gmail address, then Enter" });
     inp.addEventListener("keydown", async e => { if (e.key === "Enter" && inp.value.trim()) { UI.closePops(); await invite(inp.value); } });
     items.push({ el: inp });
     setTimeout(() => inp.focus(), 30);
   }
-  ws.members.forEach(m => items.push({ el: h("div", { class: "mi compact", style: { cursor: "default" } },
-    h("span", { class: "mi-ic", text: m === ws.ownerEmail ? "👑" : "👤" }), h("span", { class: "mi-t", style: { fontWeight: 400, fontSize: "13px" }, text: m + (m === me.email.toLowerCase() ? " (you)" : "") }),
-    isOwner && m !== ws.ownerEmail ? h("span", { style: { marginLeft: "auto", display: "flex", gap: "2px" } },
+  ws.members.forEach(m => { const r = roleOf(m); items.push({ el: h("div", { class: "mi compact", style: { cursor: "default" } },
+    h("span", { class: "mi-ic", text: r === "owner" ? "👑" : "👤" }), h("span", { class: "mi-t", style: { fontWeight: 400, fontSize: "13px" }, text: m + (m === myEmail ? " (you)" : "") }),
+    A && r !== "member" ? Apps.Access.badge(r) : null,
+    canManage && r !== "owner" && m !== ws.ownerEmail && m !== myEmail ? h("span", { style: { marginLeft: A && r !== "member" ? "4px" : "auto", display: "flex", gap: "2px" } },
       h("button", { class: "icon-btn xs", title: "Resend invite email", text: "✉️", onclick: () => { UI.closePops(); sendInvite(m); } }),
-      h("button", { class: "icon-btn xs", title: "Remove", html: icon("x"), onclick: async () => { await removeMember(m); UI.closePops(); } })) : null) }));
+      h("button", { class: "icon-btn xs", title: "Remove", html: icon("x"), onclick: async () => { await removeMember(m); UI.closePops(); } })) : null) }); });
   items.push({ sep: true },
+    ...(A && isAdmin ? [{ label: "Access & roles…", icon: "lock", onClick: () => Apps.Access.open() }] : []),
     { label: "Copy invite link", icon: "link", onClick: () => { navigator.clipboard?.writeText(`${base}#/ws/${ws.id}`); UI.toast("🔗 Invite link copied. Friends sign in with the email you invited."); } },
     ...(window.FEATURES?.pages !== false ? [{ label: "Copy link to this page", icon: "page", onClick: () => App.copyLink(App.currentId) }] : []));
   if (isOwner) items.push({ label: "Delete shared workspace", icon: "trash", danger: true, onClick: deleteWorkspace });
-  else items.push({ el: h("div", { class: "menu-empty", style: { fontSize: "12px", maxWidth: "260px" }, text: "Only the owner can invite or remove people." }) });
+  else if (!canManage) items.push({ el: h("div", { class: "menu-empty", style: { fontSize: "12px", maxWidth: "260px" }, text: "Only the owner and admins can invite or remove people." }) });
   UI.menu(anchor, items, { align: "end" });
 };
 Cloud.signIn = signIn;
+Cloud.invite = invite;
+Cloud.removeMember = removeMember;
+Cloud.access = access;
 Cloud.fs = { get fb() { return fb; }, get db() { return db; }, ref: () => wsRef };
 Cloud.createFrom = (name, state, icon) => create(name, state, icon);
 Cloud.open = open;

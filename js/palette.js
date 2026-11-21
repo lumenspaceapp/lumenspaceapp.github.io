@@ -15,7 +15,7 @@
   // while pages are off: search the team workspace instead (apps, tasks, people, CRM, files)
   function workspaceMatches(q) {
     const out = [], me = Data.me().key, has = (...s) => s.some(x => String(x || "").toLowerCase().includes(q));
-    const appList = [["home", "Home", "🏠"], ...Object.entries(Apps.reg).filter(([, d]) => !d.hidden).map(([k, d]) => [k, d.title, d.icon])];
+    const appList = [["home", "Home", "🏠"], ...Object.entries(Apps.reg).filter(([k, d]) => !d.hidden && (!Apps.can || Apps.can(k, "view"))).map(([k, d]) => [k, d.title, d.icon])];
     appList.forEach(([k, t, ic]) => { if (!q || has(t)) out.push({ ic, t, d: "App", go: k === "home" ? "#/p/home" : "#/app/" + k, s: q && t.toLowerCase().startsWith(q) ? 4 : 3 }); });
     if (!q) {
       // nothing typed: my open tasks, soonest first
