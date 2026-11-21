@@ -4,6 +4,9 @@
             deleted, deletedAt, deletedBy, deletedWith (folder id when it went to the bin with its folder),
             versions [{ id, at, by, size }] (old copies are files docs in folder "__versions" with `of` = file id), comments [{ id, by, text, at }], modified, modifiedBy.
    folders: name, parent, owner, scope, shared, shareEdit, starred, deleted, deletedAt, deletedBy, deletedWith.
+   Live Google Drive (js/gdrive.js): a folders doc with kind "gdrive" and gdrive { id, url, resourceKey? } shows that Google Drive
+            folder live (each viewer reads it with their own Google account; nothing is copied into Lumen). A files doc with
+            type "gdrive" and gdrive { id, url, mimeType?, resourceKey? } (+ url) is one live Google file.
    Who can see an item is decided by its top-level folder: a workgroup folder (projects.folder) → the group's readers,
    personal → its owner and the people it's shared with, anything else → everyone in the workspace. */
 (function () {
@@ -16,7 +19,7 @@
   const PDFJS = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/";
   const SECTIONS = [["my", "👤", "My Drive"], ["company", "🏢", "Company drive"], ["shared", "🤝", "Shared with me"], ["groups", "👥", "Groups"], ["recent", "🕘", "Recent"], ["starred", "⭐", "Starred"], ["bin", "🗑️", "Recycle bin"]];
   const FILTERS = [["", "All types"], ["folder", "Folders"], ["image", "Images"], ["doc", "Documents"], ["pdf", "PDFs"], ["link", "Links"], ["media", "Audio & video"]];
-  const KINDS = { folder: ["📁", "Folder"], link: ["🔗", "Link"], image: ["🖼️", "Image"], pdf: ["📕", "PDF"], video: ["🎬", "Video"], audio: ["🎵", "Audio"], csv: ["📊", "CSV"], md: ["📝", "Markdown"],
+  const KINDS = { folder: ["📁", "Folder"], link: ["🔗", "Link"], gdrive: ["🟢", "Google Drive file"], form: ["📋", "Form"], image: ["🖼️", "Image"], pdf: ["📕", "PDF"], video: ["🎬", "Video"], audio: ["🎵", "Audio"], csv: ["📊", "CSV"], md: ["📝", "Markdown"],
     sheet: ["📊", "Spreadsheet"], slides: ["📙", "Presentation"], doc: ["📘", "Document"], zip: ["🗜️", "Archive"], text: ["📄", "Text"], other: ["📎", "File"] };
   const VIEWS = [["list", "☰", "List"], ["grid", "▦", "Grid"], ["tiles", "🖼️", "Tiles"]];
   const GROUP_IC = { project: "📁", group: "💬", scrum: "🏃" };
@@ -43,6 +46,7 @@
   function kindOf(f) {
     const t = f.type || "", e = EXT(f.name);
     if (t === "link") return "link";
+    if (t === "gdrive") return "gdrive";
     if (/^image\//.test(t) || /^(png|jpe?g|gif|webp|svg|bmp|avif|ico)$/.test(e)) return "image";
     if (/pdf/.test(t) || e === "pdf") return "pdf";
     if (/^video\//.test(t) || /^(mp4|webm|mov|m4v|ogv)$/.test(e)) return "video";
@@ -56,7 +60,7 @@
     if (/^text\/|json|xml|javascript|x-sh|yaml/.test(t) || /^(txt|log|json|js|mjs|ts|css|html?|xml|ya?ml|ini|cfg|py|java|c|cpp|h|cs|rb|go|rs|php|sh|sql|kt|swift)$/.test(e)) return "text";
     return "other";
   }
-  const FILTER_KINDS = { image: ["image"], doc: ["doc", "sheet", "slides", "text", "md", "csv"], pdf: ["pdf"], link: ["link"], media: ["video", "audio"] };
+  const FILTER_KINDS = { image: ["image"], doc: ["doc", "sheet", "slides", "text", "md", "csv"], pdf: ["pdf"], link: ["link", "gdrive"], media: ["video", "audio"] };
   function copyText(t) {
     const p = navigator.clipboard?.writeText ? navigator.clipboard.writeText(t) : Promise.reject();
     p.then(() => UI.toast("🔗 Link copied"), () => window.prompt("Copy this link", t));
@@ -167,6 +171,143 @@
     if (cell || row.length) { row.push(cell); rows.push(row); }
     return { rows, cut: false };
   }
+
+  /* ---------- live Google Drive helpers (js/gdrive.js) ---------- */
+  const GD = () => window.GDrive || null;
+  const isGFolder = f => !!(f && f.kind === "gdrive" && f.gdrive && f.gdrive.id);
+  const gLogo = cls => h("span", { class: "gd-mark" + (cls ? " " + cls : ""), html: GD()?.LOGO || "" });
+  const clean = o => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== null));
+  const hostOf = u => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return "Link"; } };
+  // a Lumen files doc of type "gdrive" as a Google item for previews
+  const gItemOf = fx => { const g = fx.gdrive || {}; return { id: g.id, tid: g.id, name: fx.name, mimeType: g.mimeType || "", tmime: g.mimeType || "", resourceKey: g.resourceKey, tkey: g.resourceKey, webViewLink: g.url && !/\/(open|uc)\?/.test(g.url) ? g.url : "" }; };
+  const gKeys = (...xs) => GD()?.keysFor(...xs.map(x => x && { id: x.tid || x.id, resourceKey: x.tkey || x.resourceKey }));
+  const G_EMOJI = { folder: "📁", doc: "📘", sheet: "📊", slides: "📙", form: "📋", image: "🖼️", video: "🎬", audio: "🎵", pdf: "📕", text: "📄", md: "📝", zip: "🗜️", link: "🔗", other: "📎" };
+  const G_CLS = { form: "doc", folder: "folder" };
+  const gThumbs = new Map(); // id:modifiedTime:px -> thumbnail url (keeps the same url across refreshes so images don't flicker)
+  function gThumbUrl(it, px) {
+    const k = it.id + ":" + (it.modifiedTime || "") + ":" + px;
+    if (!gThumbs.has(k)) { if (gThumbs.size > 3000) gThumbs.clear(); gThumbs.set(k, GD().thumb(it.thumbnailLink, px)); }
+    return gThumbs.get(k);
+  }
+  // icon / thumbnail for a Google item; sz "s" (list) | "m" (grid) | "l" (tiles)
+  function gIcon(it, sz) {
+    const D = GD(), folder = D.isFolder(it), k = folder ? "folder" : D.kind(it.tmime || it.mimeType, it.name);
+    if (folder) return h("div", { class: "dv-ic dv-fold gd-ic" }, h("span", { text: "📁" }), it.shortcut ? h("i", { class: "dv-badge", text: "↪" }) : null);
+    const ic = D.icon(it.iconLink, sz === "s" ? 32 : 64);
+    const box = h("div", { class: "dv-ic gd-ic k-" + (G_CLS[k] || k) });
+    const plain = () => box.replaceChildren(ic ? h("img", { class: "gd-type", src: ic, alt: "", draggable: false, referrerpolicy: "no-referrer", onerror: e => e.target.replaceWith(h("span", { text: G_EMOJI[k] || "📎" })) }) : h("span", { text: G_EMOJI[k] || "📎" }));
+    const useThumb = it.hasThumbnail && it.thumbnailLink && (sz !== "s" || k === "image" || k === "video");
+    if (!useThumb) { plain(); return box; }
+    const key = it.id + ":" + (it.modifiedTime || "") + ":" + (sz === "l" ? 400 : 220);
+    box.classList.add("gd-has");
+    box.append(h("img", { class: "gd-img", src: gThumbUrl(it, sz === "l" ? 400 : 220), alt: "", loading: "lazy", draggable: false, referrerpolicy: "no-referrer",
+      onerror: () => { gThumbs.delete(key); box.classList.remove("gd-has"); plain(); } }),
+      sz !== "s" && ic ? h("img", { class: "gd-tbadge", src: ic, alt: "", draggable: false, referrerpolicy: "no-referrer", onerror: e => e.target.remove() }) : null,
+      k === "video" && sz !== "s" ? h("i", { class: "gd-play", text: "▶" }) : null);
+    return box;
+  }
+  // a Lumen files doc of type "gdrive" in normal listings: Drive logo first, then the live thumbnail / icon when connected
+  function gFileIcon(x, big) {
+    const D = GD(), g = x.gdrive || {}, k = D ? D.kind(g.mimeType, x.name) : "other";
+    const box = h("div", { class: "dv-ic gd-ic gd-file k-" + (G_CLS[k] || k) }, gLogo("gd-solo"));
+    if (D?.connected() && g.id) D.meta(g.id, gKeys({ id: g.id, resourceKey: g.resourceKey })).then(m => {
+      const n = gIcon(m, big ? "l" : "m"); n.classList.add("gd-file");
+      if (box.parentNode) box.replaceWith(n);
+    }, () => {});
+    return box;
+  }
+  // pdf.js pages into a viewer stage (used for Google PDFs and Docs/Slides exported as PDF)
+  async function renderPdfInto(stage, data, still, bag) {
+    const lib = await pdfjs(); if (!still()) return;
+    const doc = await lib.getDocument({ data }).promise;
+    if (!still()) { doc.destroy(); return; }
+    bag.push(() => { try { doc.destroy(); } catch {} });
+    const p1 = await doc.getPage(1), vp1 = p1.getViewport({ scale: 1 });
+    if (!still()) return;
+    const wrap = h("div", { class: "dvw-pdf" });
+    stage.replaceChildren(wrap, h("div", { class: "dvw-zoom glass-strong" }, h("span", { class: "dvw-zl", text: plural(doc.numPages, "page") })));
+    const io = new IntersectionObserver(es => es.forEach(async en => {
+      if (!en.isIntersecting) return;
+      io.unobserve(en.target);
+      try {
+        const page = await doc.getPage(+en.target.dataset.n); if (!still()) return;
+        const w = Math.max(200, Math.min(wrap.clientWidth - 24, 980)), dpr = Math.min(2, window.devicePixelRatio || 1);
+        const vp = page.getViewport({ scale: w / page.getViewport({ scale: 1 }).width * dpr });
+        const c = h("canvas"); c.width = vp.width; c.height = vp.height;
+        const ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+        await page.render({ canvasContext: ctx, viewport: vp }).promise;
+        if (still()) en.target.replaceChildren(c);
+      } catch {}
+    }), { root: wrap, rootMargin: "600px 0px" });
+    bag.push(() => io.disconnect());
+    for (let n = 1; n <= Math.min(doc.numPages, 300); n++) { const ph = h("div", { class: "dvw-page", dataset: { n }, style: { aspectRatio: `${vp1.width} / ${vp1.height}` } }, h("span", { class: "dv-spin" })); wrap.append(ph); io.observe(ph); }
+  }
+  // Preview a Google item inside a viewer stage. Images, PDFs, text and Docs/Slides (as PDF) load through the API with the
+  // viewer's token; everything else uses Google's own embed (which relies on the viewer's Google sign-in in this browser).
+  async function gPreview(stage, f, still, bag, onMeta) {
+    const D = GD(), MB = 1048576;
+    stage.className = "dvw-stage gd-stage";
+    stage.replaceChildren(h("div", { class: "dvw-load" }, h("span", { class: "dv-spin" })));
+    if (!D) return stage.replaceChildren(h("div", { class: "dvw-other glass-strong" }, h("b", { text: "Google Drive support didn't load" })));
+    const openBtn = () => h("a", { class: "btn primary", href: safeUrl(D.openUrl(f)), target: "_blank", rel: "noopener noreferrer" }, "Open in Google Drive ↗");
+    const card = (title, text, ...btns) => stage.replaceChildren(h("div", { class: "dvw-other glass-strong" }, gLogo("gd-big"), h("b", { text: title }), text ? h("span", { class: "dv-muted", text }) : null, ...btns));
+    const frame = note => stage.replaceChildren(h("iframe", { class: "dvw-frame gd-frame", src: D.embedUrl(f), title: f.name || "Preview", allow: "autoplay; fullscreen", allowfullscreen: true }), note || null);
+    if (!D.connected()) {
+      const st = D.status();
+      return frame(h("div", { class: "gd-frame-note glass-strong" }, gLogo(), h("span", { text: st === "unavailable" ? "Preview uses your Google sign-in in this browser." : "Preview not loading? Connect Google Drive to load it through your account." }),
+        st === "unavailable" ? null : h("button", { class: "btn", text: st === "expired" ? "Reconnect" : "Connect", onclick: () => D.connect().then(() => { if (still()) gPreview(stage, f, still, bag, onMeta); }, e => UI.toast(D.errText(e))) })));
+    }
+    const id = f.tid || f.id, keys = gKeys(f);
+    if (!f.fetched && !f.modifiedTime) {
+      try {
+        const m = await D.meta(id, keys); if (!still()) return;
+        f = { ...m, name: f.name || m.name, fetched: true }; onMeta?.(f);
+      } catch (e) {
+        if (!still()) return;
+        if (e.code === "notfound" || e.code === "forbidden") return card("Can't open this file", D.errText(e), openBtn());
+        if (e.code === "api-off") return card("Google Drive is off", D.errText(e), openBtn());
+        return frame();
+      }
+    }
+    const mt = f.tmime || f.mimeType || "", k = D.kind(mt, f.name), sz = +f.size || 0;
+    try {
+      if (k === "image" && !D.isGoogleApp(mt) && sz <= 25 * MB) {
+        const b = await D.media(id, keys); if (!still()) return;
+        const u = URL.createObjectURL(b); bag.push(() => URL.revokeObjectURL(u));
+        return stage.replaceChildren(h("div", { class: "dvw-imgbox" }, h("img", { class: "dvw-img", src: u, alt: f.name || "", draggable: false })));
+      }
+      if (mt === "application/pdf" && sz <= 40 * MB) {
+        const b = await D.media(id, keys); if (!still()) return;
+        return await renderPdfInto(stage, new Uint8Array(await b.arrayBuffer()), still, bag);
+      }
+      if (/vnd\.google-apps\.(document|presentation|drawing)$/.test(mt)) {
+        const b = await D.exportPdf(id, keys); if (!still()) return;
+        return await renderPdfInto(stage, new Uint8Array(await b.arrayBuffer()), still, bag);
+      }
+      if ((k === "text" || k === "md") && !D.isGoogleApp(mt) && sz <= 2 * MB) {
+        const txt = await (await D.media(id, keys)).text(); if (!still()) return;
+        return stage.replaceChildren(h("div", { class: "dvw-doc glass-strong" }, k === "md" ? h("div", { class: "dvw-md", html: md(txt) }) : h("pre", { class: "dvw-text", text: txt })));
+      }
+      if (/vnd\.google-apps\.(form|site|map|script|jam|folder)$/.test(mt)) return card(f.name || "Google file", D.typeLabel(mt, f.name) + " · opens in Google", openBtn());
+      frame();
+    } catch (e) {
+      if (!still()) return;
+      console.warn(e);
+      if (e.code === "notfound" || e.code === "forbidden") return card("Can't open this file", D.errText(e), openBtn());
+      frame();
+    }
+  }
+  async function gDownload(f) {
+    const D = GD(), mt = f.tmime || f.mimeType || "", pdf = D.isGoogleApp(mt);
+    if (!pdf && +f.size > 150 * 1048576) return window.open(safeUrl(D.openUrl(f)), "_blank", "noopener"); // big files download from Google itself
+    try {
+      UI.toast("⬇ Downloading…");
+      const b = pdf ? await D.exportPdf(f.tid || f.id, gKeys(f)) : await D.media(f.tid || f.id, gKeys(f));
+      const u = URL.createObjectURL(b), a = h("a", { href: u, download: pdf ? String(f.name || "file").replace(/\.pdf$/i, "") + ".pdf" : f.name || "file" });
+      document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 30000);
+    } catch (e) { UI.toast(D.errText(e)); }
+  }
+  const gCanDownload = f => { const mt = f.tmime || f.mimeType || ""; return !GD()?.isFolder(f) && (!GD()?.isGoogleApp(mt) || /vnd\.google-apps\.(document|spreadsheet|presentation|drawing)$/.test(mt)); };
 
   /* ---------- who can see / edit what ---------- */
   function world() {
@@ -296,19 +437,22 @@
     let sort; try { sort = JSON.parse(ls("lumen-drive-sort", "")) || { k: "name", d: 1 }; } catch { sort = { k: "name", d: 1 }; }
     if (!SECTIONS.some(s => s[0] === sec)) sec = "company";
     let order = [], shown = [], W = world(), io = null, V = null, raf = 0;
+    // live Google Drive folder being shown: Lumen folder id, path of Google subfolders, last listing
+    const lvFresh = () => ({ fid: "", path: [], items: null, sig: "", key: "", err: null, at: 0, busy: "", q: "", filter: "", painted: "" });
+    let lv = lvFresh(), lvSearchT = 0;
     const viewOf = () => ls("lumen-drive-view:" + sec, phone() ? "tiles" : sec === "groups" ? "grid" : "list");
 
     const nav = h("nav", { class: "dv-nav glass" });
     const crumbs = h("div", { class: "dv-crumbs" });
-    const search = h("input", { class: "app-search dv-search", type: "search", placeholder: "Search Drive…", oninput: () => { q = search.value.trim().toLowerCase(); sel.clear(); draw(); } });
-    const typeSel = h("select", { class: "app-select dv-typesel", title: "File type", onchange: () => { filter = typeSel.value; sel.clear(); draw(); } }, ...FILTERS.map(([v, l]) => h("option", { value: v }, l)));
+    const search = h("input", { class: "app-search dv-search", type: "search", placeholder: "Search Drive…", oninput: () => { if (liveFolder()) return lvSearch(search.value.trim()); q = search.value.trim().toLowerCase(); sel.clear(); draw(); } });
+    const typeSel = h("select", { class: "app-select dv-typesel", title: "File type", onchange: () => { if (liveFolder()) { lv.filter = typeSel.value; return paintLive(false); } filter = typeSel.value; sel.clear(); draw(); } }, ...FILTERS.map(([v, l]) => h("option", { value: v }, l)));
     const viewSeg = h("div", { class: "seg dv-views" });
     const hint = h("div", { class: "dv-hint" });
     const bulk = h("div", { class: "dv-bulk glass-strong" });
     const body = h("div", { class: "dv-body" });
     const upList = h("div", { class: "du-list" }), upHead = h("div", { class: "du-head" });
     const upBox = h("div", { class: "du glass-strong" }, upHead, upList);
-    const fileIn = h("input", { type: "file", multiple: true, style: { display: "none" }, onchange: () => { const t = target(); const fs = [...fileIn.files]; fileIn.value = ""; if (t) uploadEntries(fs.map(file => ({ file, path: "" })), t); } });
+    const fileIn = h("input", { type: "file", multiple: true, style: { display: "none" }, onchange: () => { const fs = [...fileIn.files]; fileIn.value = ""; if (liveFolder()) return gUpload(fs); const t = target(); if (t) uploadEntries(fs.map(file => ({ file, path: "" })), t); } });
     const dirIn = h("input", { type: "file", multiple: true, webkitdirectory: true, style: { display: "none" }, onchange: () => {
       const t = target(); const fs = [...dirIn.files]; dirIn.value = "";
       if (t) uploadEntries(fs.map(file => ({ file, path: (file.webkitRelativePath || "").split("/").slice(0, -1).join("/") })), t);
@@ -319,14 +463,26 @@
         h("div", { class: "dv-main" }, h("div", { class: "dv-bar" }, crumbs, h("span", { class: "grow" }), search, typeSel, viewSeg), hint, bulk, body)));
 
     /* ----- drag & drop: files from the computer, and moving items onto folders ----- */
-    root.addEventListener("dragover", e => { if ([...(e.dataTransfer?.types || [])].includes("Files")) { e.preventDefault(); body.classList.add("drop"); } });
-    root.addEventListener("dragleave", e => { if (!root.contains(e.relatedTarget)) body.classList.remove("drop"); });
+    const isLinkDrag = t => t.includes("text/uri-list") && !t.includes("Files") && !t.includes(DND);
+    root.addEventListener("dragover", e => {
+      const t = [...(e.dataTransfer?.types || [])];
+      if (t.includes("Files") || (isLinkDrag(t) && !liveFolder())) { e.preventDefault(); body.classList.add("drop"); body.classList.toggle("link", !t.includes("Files")); body.classList.toggle("gd", !!liveFolder()); }
+    });
+    root.addEventListener("dragleave", e => { if (!root.contains(e.relatedTarget)) body.classList.remove("drop", "link", "gd"); });
     root.addEventListener("drop", e => {
-      body.classList.remove("drop");
-      if (!e.dataTransfer?.files?.length) return;
+      body.classList.remove("drop", "link", "gd");
+      const dt = e.dataTransfer;
+      if (!dt?.files?.length) {
+        // a link dragged from the address bar or another page: add it (Google Drive links become live folders/files)
+        if (!isLinkDrag([...(dt?.types || [])]) || liveFolder()) return;
+        const url = (dt.getData("text/uri-list") || dt.getData("text/plain") || "").split(/\r?\n/).map(x => x.trim()).find(x => x && !x.startsWith("#"));
+        if (!url || !/^https?:\/\//i.test(url)) return;
+        e.preventDefault(); addLink(url); return;
+      }
       e.preventDefault();
+      if (liveFolder()) { fromDrop(dt).then(es => { const top = es.filter(x => !x.path).map(x => x.file); if (top.length < es.length) UI.toast("Folders can't be uploaded to Google Drive from Lumen. Upload them in Google Drive."); gUpload(top); }); return; }
       const t = target(); if (!t) return;
-      fromDrop(e.dataTransfer).then(es => uploadEntries(es, t));
+      fromDrop(dt).then(es => uploadEntries(es, t));
     });
     function dropTarget(el, dest) {
       el.addEventListener("dragover", e => {
@@ -339,12 +495,13 @@
         el.classList.remove("dv-over"); body.classList.remove("drop");
         const d = dest(); if (!d) return;
         const t = [...(e.dataTransfer?.types || [])];
+        if (!t.includes(DND) && !t.includes("Files")) return; // e.g. a dragged link: let Drive add it
         e.preventDefault(); e.stopPropagation();
         if (t.includes(DND)) { let keys = []; try { keys = JSON.parse(e.dataTransfer.getData(DND) || "[]"); } catch {} moveTo(keys, d); }
         else if (e.dataTransfer.files?.length) fromDrop(e.dataTransfer).then(es => uploadEntries(es, d));
       });
     }
-    const folderDest = f => () => { const w = world(), x = w.folders.get(f.id); return x && !x.deleted && w.canEdit(x, true) ? { folder: x.id, scope: w.scopeOf(x, true), label: x.name } : null; };
+    const folderDest = f => () => { const w = world(), x = w.folders.get(f.id); return x && !x.deleted && !isGFolder(x) && w.canEdit(x, true) ? { folder: x.id, scope: w.scopeOf(x, true), label: x.name } : null; };
     // dropped folders keep their structure (path = folder path inside what was dropped)
     async function fromDrop(dt) {
       const entries = [...(dt.items || [])].filter(i => i.kind === "file").map(i => i.webkitGetAsEntry?.()).filter(Boolean);
@@ -368,6 +525,7 @@
       if (folder && !q && !filter) {
         const f = w.folders.get(folder);
         if (f && !f.deleted) {
+          if (isGFolder(f)) { UI.toast("This folder lives in Google Drive. Use + New → Upload to add files to it."); return null; }
           if (!w.canEdit(f, true)) { UI.toast("You can view this folder but can't add files to it"); return null; }
           return { folder, scope: w.scopeOf(f, true), label: f.name };
         }
@@ -380,6 +538,13 @@
       return { folder: "", scope: "personal", label: "My Drive", elsewhere: sec !== "my" };
     }
     function newMenu(anchor) {
+      const lf = liveFolder();
+      if (lf) return sheetMenu(anchor, [
+        { label: "Upload to Google Drive", iconHtml: "⬆️", onClick: () => fileIn.click() },
+        { label: "New folder in Google Drive", iconHtml: "📁", onClick: gNewFolder },
+        { sep: true },
+        { label: "Open in Google Drive", iconHtml: GD()?.LOGO || "🔗", onClick: () => window.open(safeUrl(lvOpenUrl(lf)), "_blank", "noopener") },
+      ], { align: "end", title: "Google Drive" });
       sheetMenu(anchor, [
         { label: "New folder", iconHtml: "📁", onClick: newFolder },
         { sep: true },
@@ -395,13 +560,63 @@
       await Data.add("folders", { name: v.name.trim(), parent: t.folder, scope: t.scope, owner: meKey() });
       UI.toast("📁 Folder created" + (t.elsewhere ? " in My Drive" : ""));
     }
-    async function addLink() {
+    async function addLink(prefill) {
       const t = target(); if (!t) return;
-      const v = await Apps.form("Add a link", [{ key: "name", label: "Name", required: true, placeholder: "Design files (Google Drive)" }, { key: "url", label: "URL", type: "url", required: true, placeholder: "https://…" }], {}, { ok: "Add link" });
+      const v = await Apps.form("Add a link", [
+        { key: "url", label: "Link", type: "text", required: true, placeholder: "https://…  Google Drive folders and files show live" },
+        { key: "name", label: "Name (optional)", placeholder: "Leave empty to use the name from Google Drive or the site" }],
+        { url: typeof prefill === "string" ? prefill : "" }, { ok: "Add link" });
       if (!v) return;
-      const url = /^https?:\/\//i.test(v.url.trim()) ? v.url.trim() : "https://" + v.url.trim();
-      await Data.add("files", { name: v.name.trim(), type: "link", url, size: 0, folder: t.folder, scope: t.scope, owner: meKey() });
+      const raw = String(v.url || "").trim(), url = /^https?:\/\//i.test(raw) ? raw : "https://" + raw, name = String(v.name || "").trim();
+      const g = GD()?.parse(url);
+      if (g) {
+        const r = await resolveGoogle(g, name); if (!r) return;
+        const base = { name: r.name, owner: meKey(), scope: t.scope };
+        if (r.kind === "folder") {
+          const fid = await Data.add("folders", { ...base, parent: t.folder, kind: "gdrive", gdrive: r.gd });
+          UI.toast("Google Drive folder linked" + (t.elsewhere ? " in My Drive" : ""), { label: "Open", run: () => setTimeout(() => { W = world(); goFolder(fid); }, 60) });
+        } else {
+          await Data.add("files", { ...base, type: "gdrive", url: r.open, size: 0, folder: t.folder, gdrive: r.gd });
+          UI.toast("Google Drive file linked" + (t.elsewhere ? " in My Drive" : ""));
+        }
+        return;
+      }
+      await Data.add("files", { name: name || hostOf(url), type: "link", url, size: 0, folder: t.folder, scope: t.scope, owner: meKey() });
       UI.toast("🔗 Link added" + (t.elsewhere ? " to My Drive" : ""));
+    }
+    // Look a Google link up (when connected) and settle its kind and name. → { kind: "folder"|"file", name, gd, open } or null
+    async function resolveGoogle(g, name) {
+      const D = GD();
+      let kind = g.kind, id = g.id, mime = g.mimeType, rk = g.resourceKey, m = null;
+      if (D.connected()) {
+        try { m = await D.meta(id, D.keysFor({ id, resourceKey: rk }), true); }
+        catch (e) {
+          if (e.code === "notfound" || e.code === "forbidden") UI.toast("Your Google account can't open this yet. It's linked anyway and shows up once it's shared with you.");
+          else if (e.code !== "expired") UI.toast(D.errText(e));
+        }
+      }
+      if (m) { id = m.tid; kind = D.isFolder(m) ? "folder" : "file"; mime = m.tmime || mime; rk = m.tkey || rk; if (!name) name = m.name; }
+      if (id === "root") { UI.toast("Connect Google Drive first, or open the folder you want in Google Drive and copy its link."); return null; }
+      if (kind === "any" || !name) {
+        const fields = [{ key: "name", label: "Name", required: true, placeholder: kind === "file" ? "Google Drive file" : "Google Drive folder" }];
+        if (kind === "any") fields.push({ key: "kind", label: "This link opens a", type: "select", options: [["folder", "Folder"], ["file", "File"]] });
+        const v = await Apps.form(kind === "any" ? "Google Drive link" : kind === "folder" ? "Name this Google Drive folder" : "Name this Google Drive file", fields, {}, { ok: "Add", width: 440 });
+        if (!v) return null;
+        name = String(v.name).trim();
+        if (kind === "any") kind = v.kind === "file" ? "file" : "folder";
+      }
+      const item = m || { id, mimeType: kind === "folder" ? D.FOLDER : mime, resourceKey: rk };
+      const open = D.openUrl(item);
+      return { kind, name, open, gd: clean({ id, url: kind === "folder" ? open : g.url, resourceKey: rk, mimeType: kind === "file" ? mime : undefined }) };
+    }
+    // An existing link file that points at Google Drive becomes a live folder or file (same place, name and sharing).
+    async function convertLink(x) {
+      const g = GD()?.parse(x.url); if (!g) return;
+      const r = await resolveGoogle(g, x.name); if (!r) return;
+      if (r.kind === "file") { await Data.update("files", x.id, { type: "gdrive", url: r.open, gdrive: r.gd }); return UI.toast("Now shown live from Google Drive"); }
+      const fid = await Data.add("folders", clean({ name: r.name, parent: x.folder || "", scope: x.scope, owner: ownerOf(x), shared: x.shared, shareEdit: x.shareEdit, starred: x.starred, kind: "gdrive", gdrive: r.gd }));
+      await Data.remove("files", x.id);
+      UI.toast("Now a live Google Drive folder", { label: "Open", run: () => setTimeout(() => { W = world(); goFolder(fid); }, 60) });
     }
 
     /* ----- uploads with progress ----- */
@@ -499,19 +714,19 @@
         const tree = h("div", { class: "dv-tree" });
         const okBtn = h("button", { class: "btn primary", text: okLabel, disabled: true, onclick: () => { done = true; res(chosen); m.close(); } });
         const sub = pid => (w.dirs.get(pid) || []).filter(f => !exclude.has(f.id) && w.live(f, true)).sort(byName);
-        const node = (key, ic, label, val, kids, depth) => {
+        const node = (key, ic, label, val, kids, depth, note) => {
           const isOpen = open.has(key), canPick = !!val;
           const row = h("div", { class: "dvt-row" + (chosen && chosen.key === key ? " on" : "") + (canPick ? "" : " off"), style: { paddingLeft: 8 + depth * 18 + "px" },
             onclick: () => { if (!canPick) { open.has(key) ? open.delete(key) : open.add(key); return paint(); } chosen = { ...val, key }; okBtn.disabled = false; paint(); } },
             h("button", { class: "dvt-caret" + (isOpen ? " open" : ""), style: { visibility: kids().length ? "visible" : "hidden" }, html: UI.icon("caret"),
               onclick: e => { e.stopPropagation(); open.has(key) ? open.delete(key) : open.add(key); paint(); } }),
-            h("span", { class: "dvt-ic", text: ic }), h("span", { class: "dvt-t", text: label }), canPick ? null : h("small", { text: "view only" }));
+            h("span", { class: "dvt-ic", text: ic }), h("span", { class: "dvt-t", text: label }), canPick ? null : h("small", { text: note || "view only" }));
           const out = [row];
           if (isOpen) kids().forEach(f => out.push(...folderNode(f, depth + 1)));
           return out;
         };
         const folderNode = (f, depth) => node("d:" + f.id, w.isGroupRoot(f) ? groupIcon(w.groupOf.get(f.id)) : "📁", f.name,
-          w.canEdit(f, true) ? { folder: f.id, scope: w.scopeOf(f, true), label: f.name } : null, () => sub(f.id), depth);
+          w.canEdit(f, true) && !isGFolder(f) ? { folder: f.id, scope: w.scopeOf(f, true), label: f.name } : null, () => isGFolder(f) ? [] : sub(f.id), depth, isGFolder(f) ? "Google Drive" : "");
         const rootKids = kind => () => sub("").filter(f => { const a = w.area(f, true); return kind === "my" ? a.kind === "personal" && a.owner === me : kind === "company" ? a.kind === "company" : false; });
         function paint() {
           const groups = sub("").filter(f => w.isGroupRoot(f)).sort(byName);
@@ -565,11 +780,11 @@
       const free = (name, taken) => { if (!taken.has(String(name).toLowerCase())) return name; const m = String(name).match(/^(.*?)(\.[^.]+)?$/); let i = 1, nm; do { nm = `${m[1]} (copy${i > 1 ? " " + i : ""})${m[2] || ""}`; i++; } while (taken.has(nm.toLowerCase())); return nm; };
       const copyFile = async (f, pid, taken) => {
         const name = taken ? free(f.name, taken) : f.name; if (taken) taken.add(name.toLowerCase());
-        await Data.add("files", { name, type: f.type, size: f.size || 0, ...(f.data ? { data: f.data } : {}), ...(f.url ? { url: f.url } : {}), folder: pid, scope: d.scope, owner: me }); n++;
+        await Data.add("files", { name, type: f.type, size: f.size || 0, ...(f.data ? { data: f.data } : {}), ...(f.url ? { url: f.url } : {}), ...(f.gdrive ? { gdrive: f.gdrive } : {}), folder: pid, scope: d.scope, owner: me }); n++;
       };
       const copyDir = async (fd, pid, taken, depth) => {
         const name = taken ? free(fd.name, taken) : fd.name; if (taken) taken.add(name.toLowerCase());
-        const id = await Data.add("folders", { name, parent: pid, scope: d.scope, owner: me }); n++;
+        const id = await Data.add("folders", { name, parent: pid, scope: d.scope, owner: me, ...(isGFolder(fd) ? { kind: "gdrive", gdrive: fd.gdrive } : {}) }); n++;
         if (depth > 30) return;
         for (const c of (w.dirs.get(fd.id) || []).filter(c => !c.deleted)) await copyDir(c, id, null, depth + 1);
         for (const f of (w.fils.get(fd.id) || []).filter(f => !f.deleted)) await copyFile(f, id, null);
@@ -585,6 +800,10 @@
     }
     async function trash(list, quiet) {
       const w = world(), me = meKey(), now = Date.now(), done = [];
+      const gl = list.filter(({ x, isF }) => isF ? isGFolder(x) : x.type === "gdrive");
+      if (!quiet && gl.length && !(await UI.confirm(gl.length === list.length && gl.length === 1
+        ? `Remove the live Google Drive ${gl[0].isF ? "folder" : "file"} “${gl[0].x.name}” from Lumen? Only the link goes to the recycle bin. Nothing in Google Drive is changed or deleted.`
+        : "Some of these are live Google Drive items. Only their links go to the recycle bin; nothing in Google Drive is changed or deleted.", "Move to recycle bin"))) return;
       for (const { x, isF } of list) {
         if (!w.canEdit(x, isF) || (isF && w.isGroupRoot(x)) || x.deleted) continue;
         const mark = { deleted: true, deletedAt: now, deletedBy: me };
@@ -627,7 +846,8 @@
     async function purgeItems(list) {
       const items = list.filter(({ x, isF }) => W.canEdit(x, isF));
       if (!items.length) return UI.toast("You can't delete these items");
-      if (!(await UI.confirm(items.length === 1 ? `Delete “${items[0].x.name}” forever? This can't be undone.` : `Delete ${plural(items.length, "item")} forever? This can't be undone.`, "Delete forever"))) return;
+      const gNote = items.some(({ x, isF }) => isF ? isGFolder(x) : x.type === "gdrive") ? " Live Google Drive items only lose their link in Lumen; nothing in Google Drive is deleted." : "";
+      if (!(await UI.confirm((items.length === 1 ? `Delete “${items[0].x.name}” forever? This can't be undone.` : `Delete ${plural(items.length, "item")} forever? This can't be undone.`) + gNote, "Delete forever"))) return;
       for (const { x, isF } of items) await purge(x, isF);
       UI.toast(`Deleted ${plural(items.length, "item")} forever`);
       sel.clear(); schedule();
@@ -701,7 +921,9 @@
         isF ? { label: "Open", icon: "arrow", onClick: () => openEntry(e) } : opts.inViewer ? null : { label: "Preview", icon: "expand", onClick: () => openEntry(e) },
         !isF && x.data ? { label: "Download", icon: "download", onClick: () => download(x) } : null,
         !isF && x.type === "link" ? { label: "Open link", icon: "link", onClick: () => window.open(safeUrl(x.url), "_blank", "noopener") } : null,
-        isF ? { label: "Download files", icon: "download", onClick: () => downloadMany(list) } : null,
+        !isF && x.type === "link" && ed && GD()?.parse(x.url) ? { label: { folder: "Open as live folder", file: "Open as live file" }[GD().parse(x.url).kind] || "Open live from Google Drive", iconHtml: GD().LOGO, onClick: () => convertLink(x) } : null,
+        (!isF && x.type === "gdrive") || (isF && isGFolder(x)) ? { label: "Open in Google Drive", iconHtml: GD()?.LOGO || "🔗", onClick: () => window.open(safeUrl(isF ? (x.gdrive.url || "https://drive.google.com/drive/folders/" + x.gdrive.id) : x.url), "_blank", "noopener") } : null,
+        isF && !isGFolder(x) ? { label: "Download files", icon: "download", onClick: () => downloadMany(list) } : null,
         { sep: true },
         { label: star ? "Remove star" : "Star", icon: "star", onClick: () => toggleStar(x, isF) },
         { label: "Share", icon: "lock", onClick: () => shareDialog(x, isF) },
@@ -785,7 +1007,7 @@
       }
       return { mode: "root", items: [] };
     }
-    const typeLabel = e => e.isF ? "Folder" : KINDS[kindOf(e.x)][1] + (EXT(e.x.name) && e.x.type !== "link" ? " · " + EXT(e.x.name).toUpperCase() : "");
+    const typeLabel = e => e.isF ? (isGFolder(e.x) ? "Google Drive folder" : "Folder") : e.x.type === "gdrive" ? (GD() && e.x.gdrive?.mimeType ? GD().typeLabel(e.x.gdrive.mimeType, e.x.name) : "Google Drive file") : KINDS[kindOf(e.x)][1] + (EXT(e.x.name) && e.x.type !== "link" ? " · " + EXT(e.x.name).toUpperCase() : "");
     const countIn = id => (W.dirs.get(id) || []).filter(f => !f.deleted).length + (W.fils.get(id) || []).filter(f => !f.deleted).length;
     function sortItems(items, mode) {
       if (mode === "recent" && sort.k === "name" && sort.d === 1) return items;
@@ -802,6 +1024,8 @@
     /* ----- drawing ----- */
     function iconEl(e, big) {
       const { x, isF } = e;
+      if (isF && isGFolder(x)) return h("div", { class: "dv-ic dv-fold gd-fold", title: "Live Google Drive folder" }, h("span", { text: "📁" }), h("i", { class: "dv-badge gd-badge", html: GD()?.LOGO || "" }));
+      if (!isF && x.type === "gdrive") return gFileIcon(x, big);
       if (isF) {
         const g = W.groupOf.get(x.id), shared = (x.shared || []).length || (x.shareEdit || []).length;
         return h("div", { class: "dv-ic dv-fold" + (g ? " grp" : ""), style: g?.color ? { "--gc": g.color } : null }, h("span", { text: g ? groupIcon(g) : "📁" }), shared ? h("i", { class: "dv-badge", text: "🤝" }) : null);
@@ -830,7 +1054,7 @@
       const showLoc = mode === "search" || mode === "flat" || mode === "recent" || mode === "bin";
       const ownerK = mode === "bin" ? x.deletedBy || ownerOf(x) : ownerOf(x), owner = Data.person(ownerK);
       const when = mode === "bin" ? x.deletedAt : isF ? x.at : modOf(x);
-      const meta = isF ? plural(countIn(x.id), "item") : x.type === "link" ? "Link" : size(x.size);
+      const meta = isF ? (isGFolder(x) ? "Google Drive" : plural(countIn(x.id), "item")) : x.type === "link" ? "Link" : x.type === "gdrive" ? "Google Drive" : size(x.size);
       const cb = h("input", { type: "checkbox", class: "dv-cb", checked: on, title: "Select", onclick: ev => { ev.stopPropagation(); if (ev.shiftKey && last) { rangeSel(key); } else toggleSel(key, cb.checked); } });
       const more = h("button", { class: "icon-btn xs dv-more", title: "Actions", html: UI.icon("dots"), onclick: ev => { ev.stopPropagation(); itemMenu(e, ev.currentTarget); } });
       const loc = showLoc ? h("small", { class: "dv-loc", text: mode === "bin" ? "From " + W.loc(x, isF) : W.loc(x, isF) }) : null;
@@ -995,6 +1219,10 @@
       W = world();
       resolvePending();
       if (folder && (!W.folders.has(folder) || W.folders.get(folder).deleted || !W.canSee(W.folders.get(folder), true))) folder = "";
+      const lf = liveFolder();
+      if (lf) return drawLiveAll(lf);
+      if (lv.fid) { lv = lvFresh(); clearTimeout(lvSearchT); }
+      search.placeholder = "Search Drive…";
       const v = view(), L = listing(), items = sortItems(L.items, L.mode);
       order = items.map(e => e.key);
       [...sel].forEach(k => { if (!order.includes(k)) sel.delete(k); });
@@ -1018,6 +1246,294 @@
     }
     const live = UI.liveDraw(root, draw);
     function schedule() { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; live(); }); }
+
+    /* ----- live Google Drive folder ----- */
+    function liveFolder() { const f = folder && W.folders.get(folder); return isGFolder(f) && !f.deleted && !q && !filter ? f : null; }
+    const lvRoot = lf => ({ id: lf.gdrive.id, resourceKey: lf.gdrive.resourceKey });
+    const lvCur = lf => lv.path.length ? lv.path[lv.path.length - 1] : lvRoot(lf);
+    const lvKey = () => { const lf = liveFolder(); return lf ? lf.id + "|" + lvCur(lf).id + "|" + lv.q : ""; };
+    function lvOpenUrl(lf) {
+      const D = GD(), c = lvCur(lf);
+      if (!lv.path.length || !D) return lf.gdrive.url || "https://drive.google.com/drive/folders/" + lf.gdrive.id;
+      return D.openUrl({ id: c.id, mimeType: D.FOLDER, resourceKey: c.resourceKey });
+    }
+    function lvReset() { lv.items = null; lv.sig = ""; lv.err = null; lv.busy = ""; }
+    function lvSearch(text) {
+      clearTimeout(lvSearchT);
+      lvSearchT = setTimeout(() => { if (!liveFolder() || text === lv.q) return; lv.q = text; lvReset(); drawLiveCrumbs(liveFolder()); paintLive(); lvLoad(); }, 380);
+    }
+    function lvGo(n) {
+      const lf = liveFolder(); if (!lf) return;
+      GD()?.renewSoon();
+      lv.path = lv.path.slice(0, n); lv.q = ""; search.value = ""; lvReset();
+      drawLiveCrumbs(lf); drawLiveHint(lf); paintLive(); lvLoad();
+    }
+    function lvOpen(it, files) {
+      const D = GD();
+      D.renewSoon();
+      if (D.isFolder(it)) { lv.path.push(clean({ id: it.tid, name: it.name, resourceKey: it.tkey || undefined })); return lvGo(lv.path.length); }
+      openG(it, files);
+    }
+    function lvConnect(opts) {
+      const D = GD(); if (!D) return;
+      D.connect(opts).then(() => { lv.err = null; lvLoad(); }, e => {
+        if (e.code === "api-off") { lv.err = e; paintLive(); }
+        else if (e.code !== "closed") UI.toast(D.errText(e));
+      });
+    }
+    async function lvLoad(quiet) {
+      const lf = liveFolder(), D = GD(); if (!lf || !D) return;
+      if (!D.connected()) { drawLiveHint(lf); return paintLive(); }
+      const cur = lvCur(lf), key = lvKey();
+      if (lv.busy === key) return;
+      lv.busy = key; lv.loud = !quiet; lvStamp();
+      try {
+        const items = await D.list(cur.id, { q: lv.q, keys: gKeys(lvRoot(lf), ...lv.path) });
+        if (lvKey() !== key) return;
+        const sig = items.map(x => [x.id, x.name, x.modifiedTime, x.size || "", x.hasThumbnail ? 1 : 0].join(":")).join("|");
+        const changed = sig !== lv.sig || lv.key !== key || !!lv.err || !lv.items;
+        Object.assign(lv, { items, sig, key, err: null, at: Date.now() });
+        if (changed) paintLive(); // unchanged folders keep their DOM: no flicker
+      } catch (e) {
+        if (lvKey() !== key) return;
+        const keep = lv.items && lv.key === key && ["offline", "network", "rate"].includes(e.code);
+        lv.err = e; lv.key = key;
+        if (!keep) { lv.items = null; lv.sig = ""; }
+        if (e.code !== "expired") paintLive();
+      } finally {
+        if (lv.busy === key) lv.busy = "";
+        lv.loud = false;
+        if (liveFolder()) lvStamp();
+      }
+    }
+    function drawLiveAll(lf) {
+      if (lv.fid !== lf.id) { lv = lvFresh(); lv.fid = lf.id; search.value = ""; typeSel.value = ""; }
+      order = []; shown = []; sel.clear(); root.classList.remove("dv-selecting"); drawBulk();
+      search.placeholder = "Search this Google Drive folder…";
+      drawNav(); drawLiveCrumbs(lf); drawLiveHint(lf);
+      const v = view();
+      viewSeg.replaceChildren(...VIEWS.map(([k, ic, l]) => h("button", { class: v === k ? "on" : "", title: l, onclick: () => { lsSet("lumen-drive-view:" + sec, k); lv.painted = ""; draw(); } }, h("span", { text: ic }), h("span", { class: "dv-vl", text: " " + l }))));
+      viewSeg.style.visibility = "";
+      paintLive();
+      if (GD()?.connected() && !lv.items && !lv.err && !lv.busy) lvLoad();
+    }
+    function drawLiveCrumbs(lf) {
+      if (!lf) return;
+      const s = SECTIONS.find(x => x[0] === sec), sep = () => h("span", { class: "dv-csep", text: "/" });
+      let chain = W.chain(lf.id);
+      if (sec === "shared") { const i = chain.findIndex(f => isShareRoot(f, true)); chain = chain.slice(Math.max(0, i)); }
+      const parts = [h("button", { class: "dv-crumb", text: s[1] + " " + s[2], onclick: () => goSection(sec) })];
+      chain.slice(0, -1).forEach(f => parts.push(sep(), h("button", { class: "dv-crumb", text: (W.isGroupRoot(f) ? groupIcon(W.groupOf.get(f.id)) + " " : "") + f.name, onclick: () => goFolder(f.id) })));
+      parts.push(sep(), h("button", { class: "dv-crumb gd-crumb" + (lv.path.length || lv.q ? "" : " last"), title: "Live Google Drive folder", onclick: () => lvGo(0) }, gLogo(), h("span", { text: lf.name })));
+      lv.path.forEach((p, i) => parts.push(sep(), h("button", { class: "dv-crumb" + (i === lv.path.length - 1 && !lv.q ? " last" : ""), text: p.name, onclick: () => lvGo(i + 1) })));
+      if (lv.q) parts.push(sep(), h("span", { class: "dv-crumb last", text: `🔎 “${lv.q}”` }));
+      parts.push(h("button", { class: "icon-btn xs dv-fmenu", title: "Folder actions", html: UI.icon("dots"), onclick: ev => itemMenu({ x: lf, isF: true, key: "d:" + lf.id }, ev.currentTarget) }));
+      crumbs.replaceChildren(...parts);
+    }
+    function lvStamp() {
+      const el = hint.querySelector(".gd-stamp"); if (!el) return;
+      el.textContent = lv.busy && (lv.loud || !lv.items) ? "Refreshing…" : lv.err && lv.items ? "Couldn't refresh · retrying" : lv.at ? (Date.now() - lv.at < 30000 ? "Updated just now" : "Updated " + UI.timeAgo(lv.at)) : "";
+    }
+    function acctMenu(anchor) {
+      const D = GD(), a = D.account();
+      sheetMenu(anchor, [
+        { section: a?.email ? "Connected as " + a.email : "Google account" },
+        { label: "Use another Google account", iconHtml: "🔄", onClick: () => lvConnect({ select: true }) },
+        { label: "Disconnect Google Drive", iconHtml: "⏏️", danger: true, onClick: () => { D.disconnect(); UI.toast("Google Drive disconnected in this tab"); } },
+      ], { title: "Google Drive" });
+    }
+    function drawLiveHint(lf) {
+      const D = GD(), st = D ? D.status() : "unavailable", a = D?.account(), on = st === "on";
+      const sortBtn = on && view() !== "list" ? h("button", { class: "chip-btn dv-sortbtn", onclick: ev => sortMenu(ev.currentTarget) }, "↕ " + ({ name: "Name", modified: "Modified", size: "Size", type: "Type", owner: "Owner" }[sort.k] || "Name")) : null;
+      hint.replaceChildren(
+        h("span", { class: "gd-live" + (on ? " on" : "") }, gLogo(), h("span", { text: on ? "Live from Google Drive" : "Google Drive folder" })),
+        on ? h("span", { class: "gd-stamp" }) : h("span", { class: "gd-note", text: "· nothing is copied into Lumen" }),
+        h("span", { class: "grow" }), sortBtn,
+        on ? h("button", { class: "icon-btn xs gd-refresh", title: "Refresh now", text: "↻", onclick: () => { GD().renewSoon(); lvLoad(false); } }) : null,
+        on ? h("button", { class: "chip-btn gd-acct", title: "Google account", onclick: ev => acctMenu(ev.currentTarget) },
+          a?.photo ? h("img", { src: a.photo, alt: "", referrerpolicy: "no-referrer", onerror: e => e.target.remove() }) : null, h("span", { text: a?.email || "Google account" })) : null,
+        h("a", { class: "btn gd-open", href: safeUrl(lvOpenUrl(lf)), target: "_blank", rel: "noopener noreferrer" }, gLogo(), h("span", { class: "dv-bl", text: "Open in Google Drive" })));
+      lvStamp();
+    }
+    function lvSorted(items) {
+      const D = GD();
+      const val = { name: x => String(x.name || "").toLowerCase(), modified: x => Date.parse(x.modifiedTime) || 0, size: x => +x.size || 0, type: x => D.typeLabel(x.tmime, x.name), owner: x => x.owners?.[0]?.displayName || "" }[sort.k] || (x => String(x.name || "").toLowerCase());
+      const cmp = (a, b) => { const va = val(a), vb = val(b); return (typeof va === "number" ? va - vb : String(va).localeCompare(String(vb), undefined, { numeric: true, sensitivity: "base" })) * sort.d || byName(a, b); };
+      return [...items.filter(x => D.isFolder(x)).sort(cmp), ...items.filter(x => !D.isFolder(x)).sort(cmp)];
+    }
+    function lvFiltered(items) {
+      const D = GD(), f = lv.filter;
+      if (!f) return items;
+      return items.filter(x => {
+        const k = D.isFolder(x) ? "folder" : D.kind(x.tmime, x.name);
+        return f === "folder" ? k === "folder" : f === "image" ? k === "image" : f === "pdf" ? k === "pdf" : f === "media" ? k === "video" || k === "audio"
+          : f === "link" ? x.shortcut || k === "link" : f === "doc" ? ["doc", "sheet", "slides", "form", "text", "md"].includes(k) : true;
+      });
+    }
+    function gState(title, text, ...btns) {
+      return h("div", { class: "gd-state glass" }, gLogo("gd-big"), h("b", { text: title }), text ? h("p", { text }) : null, h("div", { class: "gd-state-btns" }, ...btns));
+    }
+    function paintLive() {
+      const lf = liveFolder(); if (!lf) return;
+      const D = GD();
+      if (!D) return body.replaceChildren(Apps.empty("⚠️", "Google Drive support didn't load. Reload the page and try again."));
+      const st = D.status(), a = D.account();
+      const openBtn = () => h("a", { class: "btn", href: safeUrl(lvOpenUrl(lf)), target: "_blank", rel: "noopener noreferrer" }, "Open in Google Drive ↗");
+      const privacy = "Lumen reads this folder with your own Google account; nothing is copied into Lumen.";
+      if (st === "unavailable") return body.replaceChildren(gState("Google Drive isn't set up yet", "The site owner needs to add a Google sign-in client ID before folders can be shown live here.", openBtn()));
+      if (st === "off") return body.replaceChildren(gState("Connect Google Drive to see this folder", privacy, h("button", { class: "btn primary", text: "Connect Google Drive", onclick: () => lvConnect() }), openBtn()));
+      if (st === "expired") return body.replaceChildren(gState("Your Google Drive session ended", "Reconnect to keep this folder live. " + privacy, h("button", { class: "btn primary", text: "Reconnect", onclick: () => lvConnect() }), openBtn()));
+      const e = lv.err, retry = () => h("button", { class: "btn primary", text: "Try again", onclick: () => { lvReset(); paintLive(); lvLoad(); } });
+      if (e && !lv.items) {
+        if (e.code === "api-off") return body.replaceChildren(gState("Google Drive API is off", "The site owner needs to turn on the Google Drive API for this site.", retry(), openBtn()));
+        if (e.code === "notfound" || e.code === "forbidden") return body.replaceChildren(gState("No access to this folder", `Your Google account${a?.email ? " (" + a.email + ")" : ""} can't open this folder. Ask its owner to share it with you.`, openBtn(), h("button", { class: "btn", text: "Use another account", onclick: () => lvConnect({ select: true }) })));
+        if (e.code === "offline" || e.code === "network") return body.replaceChildren(gState("You're offline", "This folder refreshes by itself when you're back online.", retry()));
+        return body.replaceChildren(gState("Couldn't load this folder", D.errText(e), retry(), openBtn()));
+      }
+      if (!lv.items) return body.replaceChildren(h("div", { class: "gd-skel-wrap " + (view() === "list" ? "list" : "grid") }, ...Array.from({ length: 8 }, (_, i) => h("div", { class: "gd-skel", style: { animationDelay: i * 60 + "ms" } }))));
+      const k = lvKey(), anim = lv.painted !== k; lv.painted = k;
+      const items = lvSorted(lvFiltered(lv.items)), files = items.filter(x => !D.isFolder(x));
+      if (!items.length) return body.replaceChildren(Apps.empty("📂", lv.q ? `Nothing in this folder matches “${lv.q}”.` : lv.filter ? "Nothing of this type here." : "This Google Drive folder is empty.",
+        !lv.q && !lv.filter ? h("button", { class: "btn primary", text: "⬆ Upload to Google Drive", onclick: () => fileIn.click() }) : null));
+      const v = view(), still = anim ? "" : " gd-still";
+      const el = (it, i) => gEl(it, i, v, files);
+      if (v === "list") return body.replaceChildren(h("div", { class: "dv-list glass gd-list" + still }, listHead("folder"), ...items.map(el)));
+      const dirs = items.filter(x => D.isFolder(x));
+      body.replaceChildren(h("div", { class: "gd-wrap" + still },
+        dirs.length ? h("div", { class: "gd-sec", text: "Folders" }) : null,
+        dirs.length ? h("div", { class: "gd-chips" }, ...dirs.map(el)) : null,
+        files.length ? h("div", { class: "gd-sec", text: "Files" }) : null,
+        files.length ? h("div", { class: v === "tiles" ? "dv-tiles" : "dv-grid" }, ...files.map((it, i) => el(it, i + dirs.length))) : null));
+    }
+    function gEl(it, i, v, files) {
+      const D = GD(), isDir = D.isFolder(it), owner = it.owners?.[0], ownerName = owner?.displayName || "", when = Date.parse(it.modifiedTime) || 0;
+      const meta = isDir ? "Folder" : it.size ? size(+it.size) : "";
+      const more = h("button", { class: "icon-btn xs dv-more", title: "Actions", html: UI.icon("dots"), onclick: ev => { ev.stopPropagation(); gMenu(it, ev.currentTarget, files); } });
+      const nameEl = h("div", { class: "dv-nm" }, h("div", { class: "dv-name-row" }, h("span", { class: "dv-name", text: it.name || "Untitled", title: it.name }), it.shortcut ? h("span", { class: "dv-b", title: "Shortcut", text: "↪" }) : null),
+        v === "list" ? h("small", { class: "dv-sub", text: [meta, when ? UI.timeAgo(when) : ""].filter(Boolean).join(" · ") }) : null);
+      let el;
+      if (v === "list") el = h("div", { class: "dv-lrow dv-item gd-item" }, h("span"), gIcon(it, "s"), nameEl,
+        h("span", { class: "dv-c dv-owner", text: ownerName || "—", title: owner?.emailAddress || "" }), h("span", { class: "dv-c", text: when ? UI.timeAgo(when) : "—", title: fmtWhen(when) }),
+        h("span", { class: "dv-c", text: meta || "—" }), h("span", { class: "dv-c dv-type", text: isDir ? "Folder" : D.typeLabel(it.tmime, it.name) }), more);
+      else if (isDir) el = h("div", { class: "gd-chip dv-item glass" }, h("span", { class: "gd-chip-ic", text: "📁" }), h("span", { class: "dv-name", text: it.name || "Untitled", title: it.name }), it.shortcut ? h("span", { class: "dv-b", text: "↪" }) : null, more);
+      else el = h("div", { class: (v === "tiles" ? "dv-tile" : "dv-card") + " dv-item glass gd-item" }, h("div", { class: "dv-vis" }, gIcon(it, v === "tiles" ? "l" : "m")), more, nameEl,
+        h("div", { class: "dv-meta", text: [ownerName.split(" ")[0], when ? UI.timeAgo(when) : "", it.size ? size(+it.size) : ""].filter(Boolean).join(" · ") }));
+      el.style.animationDelay = Math.min(i * 22, 330) + "ms";
+      el.tabIndex = 0; el.dataset.gid = it.id;
+      el.addEventListener("click", () => lvOpen(it, files));
+      el.addEventListener("keydown", ev => { if (ev.key === "Enter") lvOpen(it, files); });
+      el.addEventListener("contextmenu", ev => { ev.preventDefault(); gMenu(it, { left: ev.clientX, right: ev.clientX, top: ev.clientY, bottom: ev.clientY }, files); });
+      return el;
+    }
+    function gMenu(it, anchor, files) {
+      const D = GD(), isDir = D.isFolder(it), gapp = D.isGoogleApp(it.tmime);
+      sheetMenu(anchor, [
+        { label: isDir ? "Open" : "Preview", icon: isDir ? "arrow" : "expand", onClick: () => lvOpen(it, files) },
+        { label: "Open in Google Drive", iconHtml: D.LOGO, onClick: () => window.open(safeUrl(D.openUrl(it)), "_blank", "noopener") },
+        gCanDownload(it) ? { label: gapp ? "Download as PDF" : "Download", icon: "download", onClick: () => gDownload(it) } : null,
+        { label: "Copy Google Drive link", icon: "link", onClick: () => copyText(D.openUrl(it)) },
+      ], { title: it.name });
+    }
+    async function ensureWrite() {
+      const D = GD(); if (!D) return false;
+      if (D.canWrite()) return true;
+      if (D.status() === "unavailable") { UI.toast(D.errText({ code: "unavailable" })); return false; }
+      if (!(await UI.confirm("To add files, Lumen needs your OK to upload to Google Drive with your own Google account. Google asks you once.", "Continue"))) return false;
+      try { await D.connect({ write: true }); return D.canWrite(); }
+      catch (e) { if (e.code !== "closed") UI.toast(D.errText(e)); return false; }
+    }
+    async function gUpload(files) {
+      const lf = liveFolder(); files = (files || []).filter(Boolean);
+      if (!lf || !files.length) return;
+      const cur = lvCur(lf), keys = gKeys(lvRoot(lf), ...lv.path);
+      if (!(await ensureWrite())) return;
+      const D = GD();
+      clearTimeout(upHide);
+      if (upDone >= upJobs) { upJobs = 0; upDone = 0; upList.replaceChildren(); }
+      upJobs += files.length; upPaint();
+      if (!upBox.isConnected) document.getElementById("layer").append(upBox);
+      upBox.classList.add("on");
+      let bad = 0;
+      for (const file of files) {
+        const row = upRow(file.name, file.size);
+        try {
+          if (file.size > D.MAX_UPLOAD) { bad++; row.status("Over 25 MB · upload it in Google Drive", "err"); continue; }
+          await D.upload(cur.id, file, { keys, onProgress: p => row.set(p) });
+          row.set(1); row.status("In Google Drive", "ok");
+        } catch (e) {
+          bad++; console.warn(e);
+          row.status(e.code === "forbidden" || e.code === "notfound" ? "Your Google account can't add files here" : e.code === "scope" ? "Needs your OK to upload" : e.code === "offline" ? "Offline" : "Failed", "err");
+        } finally { upDone++; upPaint(); }
+      }
+      lvLoad(true);
+      if (upDone >= upJobs) upHide = setTimeout(() => upBox.classList.remove("on"), bad ? 9000 : 3500);
+    }
+    async function gNewFolder() {
+      const lf = liveFolder(); if (!lf) return;
+      const cur = lvCur(lf), keys = gKeys(lvRoot(lf), ...lv.path);
+      const v = await Apps.form("New folder in Google Drive", [{ key: "name", label: "Folder name", required: true, placeholder: "Untitled folder" }], {}, { ok: "Create", width: 420 });
+      if (!v || !(await ensureWrite())) return;
+      try { await GD().mkdir(cur.id, String(v.name).trim(), keys); UI.toast("📁 Folder created in Google Drive"); lvLoad(true); }
+      catch (e) { UI.toast(e.code === "forbidden" || e.code === "notfound" ? "Your Google account can't add folders here" : GD().errText(e)); }
+    }
+    // preview panel for files inside a live folder
+    function openG(it, list) {
+      closeViewer();
+      const D = GD(), lf = liveFolder(), items = (list && list.length ? list : [it]).slice(), where = lf ? [W.loc(lf, true), lf.name, ...lv.path.map(p => p.name)].join(" / ") : "Google Drive";
+      let i = Math.max(0, items.findIndex(x => x.id === it.id)), closed = false, token = 0;
+      const bag = [];
+      const stage = h("div", { class: "dvw-stage" }), title = h("div", { class: "dvw-title" }), acts = h("div", { class: "dvw-acts" }), content = h("div", { class: "dvw-content" });
+      const prev = h("button", { class: "dvw-nav prev", title: "Previous (←)", html: UI.icon("caret"), onclick: () => step(-1) });
+      const next = h("button", { class: "dvw-nav next", title: "Next (→)", html: UI.icon("caret"), onclick: () => step(1) });
+      const el = h("div", { class: "dvw gd-viewer" }, h("div", { class: "dvw-top glass-strong" }, title, acts),
+        h("div", { class: "dvw-main" }, h("div", { class: "dvw-stage-wrap" }, stage, prev, next), h("aside", { class: "dvw-side glass-strong" }, content)));
+      el.addEventListener("mousedown", e => { if (e.target === el || e.target.classList.contains("dvw-stage-wrap")) closeViewer(); });
+      document.getElementById("layer").append(el);
+      const free = () => bag.splice(0).forEach(fn => { try { fn(); } catch {} });
+      function step(d) { if (items.length < 2) return; i = (i + d + items.length) % items.length; show(); }
+      const onKey = e => {
+        if (document.querySelector("#layer .backdrop, #layer .pop, .dv-sheet-bd")) return;
+        const a = document.activeElement;
+        if (a && (a.tagName === "TEXTAREA" || a.tagName === "INPUT" || a.tagName === "SELECT")) return;
+        if (e.key === "Escape") closeViewer(); else if (e.key === "ArrowLeft") step(-1); else if (e.key === "ArrowRight") step(1);
+      };
+      document.addEventListener("keydown", onKey);
+      function drawTop(f) {
+        const ic = D.icon(f.iconLink, 32), when = Date.parse(f.modifiedTime) || 0;
+        title.replaceChildren(ic ? h("img", { class: "dvw-ic gd-vic", src: ic, alt: "", referrerpolicy: "no-referrer", onerror: e => e.target.remove() }) : h("span", { class: "dvw-ic", text: G_EMOJI[D.kind(f.tmime, f.name)] || "📎" }),
+          h("div", { class: "dvw-tt" }, h("b", { text: f.name, title: f.name }),
+            h("small", { text: [items.length > 1 ? `${i + 1} of ${items.length}` : "", D.typeLabel(f.tmime, f.name), f.size ? size(+f.size) : "", when ? "changed " + UI.timeAgo(when) : ""].filter(Boolean).join(" · ") })));
+        acts.replaceChildren(
+          gCanDownload(f) ? iconBtn("download", D.isGoogleApp(f.tmime) ? "Download as PDF" : "Download", () => gDownload(f)) : null,
+          iconBtn("link", "Copy Google Drive link", () => copyText(D.openUrl(f))),
+          h("a", { class: "btn dvw-share", href: safeUrl(D.openUrl(f)), target: "_blank", rel: "noopener noreferrer" }, gLogo(), h("span", { class: "dv-bl", text: "Open in Google Drive" })),
+          iconBtn("x", "Close (Esc)", closeViewer));
+      }
+      function drawSide(f) {
+        const row = (l, ...v) => h("div", { class: "dvw-row" }, h("span", { class: "dvw-l", text: l }), h("div", { class: "dvw-v" }, ...v));
+        const owner = f.owners?.[0], when = Date.parse(f.modifiedTime) || 0;
+        content.replaceChildren(h("div", { class: "dvw-details" },
+          f.hasThumbnail && f.thumbnailLink ? h("div", { class: "dvw-prevmini gd-prevmini" }, h("img", { src: gThumbUrl(f, 400), alt: "", referrerpolicy: "no-referrer", onerror: e => e.target.parentNode.remove() })) : null,
+          row("Owner", owner ? (owner.displayName || owner.emailAddress || "—") : "—"),
+          row("Type", D.typeLabel(f.tmime, f.name)),
+          f.size ? row("Size", size(+f.size)) : null,
+          row("Modified", when ? fmtWhen(when) : "—"),
+          row("Location", h("span", { class: "gd-where" }, gLogo(), h("span", { text: where }))),
+          h("div", { class: "dvw-btns" }, h("a", { class: "btn primary", href: safeUrl(D.openUrl(f)), target: "_blank", rel: "noopener noreferrer", text: "Open in Google Drive ↗" }), h("button", { class: "btn", text: "🔗 Copy link", onclick: () => copyText(D.openUrl(f)) })),
+          h("p", { class: "dv-note", text: "Shown live from Google Drive with your own Google account. Nothing is stored in Lumen." })));
+      }
+      function show() {
+        const f = items[i], my = ++token;
+        free(); drawTop(f); drawSide(f);
+        prev.hidden = next.hidden = items.length < 2;
+        gPreview(stage, f, () => my === token && !closed, bag, m => { if (my !== token) return; items[i] = { ...f, ...m }; drawTop(items[i]); drawSide(items[i]); });
+      }
+      V = {
+        close() { closed = true; token++; free(); document.removeEventListener("keydown", onKey); el.classList.add("closing"); setTimeout(() => el.remove(), 200); },
+        refresh() {},
+      };
+      show();
+    }
 
     /* ----- storage ----- */
     function storageModal() {
@@ -1045,6 +1561,7 @@
       closeViewer();
       const ids = (list && list.length ? list : [f]).map(x => x.id);
       if (!ids.includes(f.id)) ids.unshift(f.id);
+      let gbag = [];
       let cur = f.id, token = 0, urls = [], pdfDoc = null, pageIO = null, zoom = "fit", stageKey = "", closed = false, tab = firstTab || ls("lumen-drive-vtab", "details");
       if (phone() && !firstTab) tab = "details";
       touch(cur);
@@ -1060,7 +1577,7 @@
       const composer = h("div", { class: "dvw-compose" }, cInput, h("button", { class: "btn primary", text: "Post", onclick: post }));
       Apps.mentionAssist(cInput);
       cInput.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing && !document.querySelector("#layer .pop")) { e.preventDefault(); post(); } });
-      const freeUrls = () => { urls.forEach(u => URL.revokeObjectURL(u)); urls = []; pageIO?.disconnect(); pageIO = null; if (pdfDoc) { try { pdfDoc.destroy(); } catch {} pdfDoc = null; } };
+      const freeUrls = () => { gbag.splice(0).forEach(fn => { try { fn(); } catch {} }); urls.forEach(u => URL.revokeObjectURL(u)); urls = []; pageIO?.disconnect(); pageIO = null; if (pdfDoc) { try { pdfDoc.destroy(); } catch {} pdfDoc = null; } };
       const still = my => my === token && !closed;
       function step(d) { if (ids.length < 2) return; const i = ids.indexOf(cur); let j = i, n = 0; do { j = (j + d + ids.length) % ids.length; n++; } while (n < ids.length && !Data.get("files", ids[j])); if (ids[j] !== cur) { cur = ids[j]; zoom = "fit"; cInput.value = ""; touch(cur); show(true); } }
       const onKey = e => {
@@ -1155,10 +1672,13 @@
             urls.push(u);
             stage.replaceChildren(k === "video" ? h("video", { class: "dvw-video", src: u, controls: true, playsinline: true, preload: "metadata" })
               : h("div", { class: "dvw-other glass-strong" }, h("div", { class: "dvw-big spin", text: "🎵" }), h("b", { text: fx.name }), h("audio", { src: u, controls: true, preload: "metadata" })));
+          } else if (k === "gdrive") {
+            await gPreview(stage, gItemOf(fx), () => still(my), gbag);
           } else if (k === "link") {
             stage.replaceChildren(h("div", { class: "dvw-other glass-strong" }, h("div", { class: "dvw-big", text: "🔗" }), h("b", { text: fx.name }),
               h("a", { class: "dvw-url", href: safeUrl(fx.url), target: "_blank", rel: "noopener noreferrer", text: fx.url || "" }),
-              h("a", { class: "btn primary", href: safeUrl(fx.url), target: "_blank", rel: "noopener noreferrer", text: "Open link ↗" })));
+              h("a", { class: "btn primary", href: safeUrl(fx.url), target: "_blank", rel: "noopener noreferrer", text: "Open link ↗" }),
+              GD()?.parse(fx.url) && world().canEdit(fx, false) ? h("button", { class: "btn", onclick: () => { closeViewer(); convertLink(fx); } }, gLogo(), " Show it live in Lumen") : null));
           } else {
             stage.replaceChildren(h("div", { class: "dvw-other glass-strong" }, h("div", { class: "dvw-big", text: KINDS[k][0] }), h("b", { text: fx.name }),
               h("span", { class: "dv-muted", text: `${KINDS[k][1]} · ${size(fx.size)} · no preview for this type` }),
@@ -1173,9 +1693,9 @@
       function drawTop(fx) {
         const star = (fx.starred || []).includes(meKey()), i = ids.indexOf(cur), k = kindOf(fx);
         title.replaceChildren(h("span", { class: "dvw-ic", text: KINDS[k][0] }), h("div", { class: "dvw-tt" }, h("b", { text: fx.name, title: fx.name }),
-          h("small", { text: [ids.length > 1 ? `${i + 1} of ${ids.length}` : "", fx.type === "link" ? "Link" : size(fx.size), "changed " + UI.timeAgo(modOf(fx) || Date.now())].filter(Boolean).join(" · ") })));
+          h("small", { text: [ids.length > 1 ? `${i + 1} of ${ids.length}` : "", fx.type === "link" ? "Link" : fx.type === "gdrive" ? "Live from Google Drive" : size(fx.size), "changed " + UI.timeAgo(modOf(fx) || Date.now())].filter(Boolean).join(" · ") })));
         acts.replaceChildren(
-          fx.data ? iconBtn("download", "Download", () => download(fx)) : fx.type === "link" ? iconBtn("link", "Open link", () => window.open(safeUrl(fx.url), "_blank", "noopener")) : null,
+          fx.data ? iconBtn("download", "Download", () => download(fx)) : fx.type === "link" || fx.type === "gdrive" ? iconBtn("link", fx.type === "gdrive" ? "Open in Google Drive" : "Open link", () => window.open(safeUrl(fx.url), "_blank", "noopener")) : null,
           iconBtn("star", star ? "Remove star" : "Star", () => toggleStar(fx, false), star ? "dvw-star on" : "dvw-star"),
           h("button", { class: "btn dvw-share", onclick: () => shareDialog(fx, false) }, h("span", { html: UI.icon("lock") }), h("span", { class: "dv-bl", text: "Share" })),
           iconBtn("dots", "More", e => sheetMenu(e.currentTarget, itemActions({ x: fx, isF: false, key: "f:" + fx.id }, { inViewer: true }), { title: fx.name })),
@@ -1202,8 +1722,8 @@
         return h("div", { class: "dvw-details" },
           k === "image" && fx.data ? h("div", { class: "dvw-prevmini", style: { backgroundImage: `url("${fx.data}")` } }) : null,
           row("Owner", h("span", { class: "dvw-who" }, Apps.avatar(owner, 22), h("span", { text: owner.name }))),
-          row("Type", KINDS[k][1] + (EXT(fx.name) && fx.type !== "link" ? ` (.${EXT(fx.name)})` : "")),
-          fx.type === "link" ? row("Link", h("a", { href: safeUrl(fx.url), target: "_blank", rel: "noopener noreferrer", class: "dvw-url", text: fx.url || "" })) : row("Size", size(fx.size)),
+          row("Type", fx.type === "gdrive" ? (fx.gdrive?.mimeType && GD() ? GD().typeLabel(fx.gdrive.mimeType, fx.name) : "Google Drive file") + " · live" : KINDS[k][1] + (EXT(fx.name) && fx.type !== "link" ? ` (.${EXT(fx.name)})` : "")),
+          fx.type === "link" || fx.type === "gdrive" ? row(fx.type === "gdrive" ? "Google Drive" : "Link", h("a", { href: safeUrl(fx.url), target: "_blank", rel: "noopener noreferrer", class: "dvw-url", text: fx.url || "" })) : row("Size", size(fx.size)),
           row("Created", `${fmtWhen(fx.at)} by ${Data.person(fx.by).name}`),
           row("Modified", fmtWhen(modOf(fx)) + (fx.modifiedBy ? ` by ${Data.person(fx.modifiedBy).name}` : "")),
           row("Location", locEl),
@@ -1214,7 +1734,7 @@
       }
       function versionsEl(fx) {
         const w = world(), ed = w.canEdit(fx, false) && !!fx.data;
-        if (!fx.data) return h("div", { class: "dv-note", text: fx.type === "link" ? "Links don't have versions." : "This file has no stored content." });
+        if (!fx.data) return h("div", { class: "dv-note", text: fx.type === "link" ? "Links don't have versions." : fx.type === "gdrive" ? "Google Drive keeps this file's versions. Open it in Google Drive to see them." : "This file has no stored content." });
         const vRow = (v, current) => h("div", { class: "dvw-ver" + (current ? " cur" : "") }, Apps.avatar(Data.person(v.by), 28),
           h("div", { class: "dvw-vt" }, h("b", { text: current ? "Current version" : fmtWhen(v.at) }), h("small", { text: [current ? fmtWhen(v.at) : "", Data.person(v.by).name, size(v.size)].filter(Boolean).join(" · ") })),
           current ? h("span", { class: "dv-role", text: "Now" }) : h("span", { class: "dvw-vacts" },
@@ -1263,9 +1783,23 @@
     document.addEventListener("keydown", onKey);
 
     const offs = ["files", "folders", "projects", "settings"].map(c => Data.on(c, () => { schedule(); if (c === "files" || c === "settings") V?.refresh(); })); // settings: versions on/off
+    // live Google Drive folders: refresh every 20 s while visible, and right away when the tab comes back or goes online
+    const lvTick = setInterval(() => {
+      if (!liveFolder()) return;
+      lvStamp();
+      if (document.visibilityState === "visible" && GD()?.connected() && navigator.onLine !== false && Date.now() - lv.at >= 20000) lvLoad(true);
+    }, 5000);
+    const lvWake = () => { if (liveFolder() && document.visibilityState === "visible" && GD()?.connected() && Date.now() - lv.at > 5000) lvLoad(true); };
+    document.addEventListener("visibilitychange", lvWake); window.addEventListener("focus", lvWake); window.addEventListener("online", lvWake);
+    const offG = GD()?.on(() => {
+      if (liveFolder()) { if (!GD().connected()) { lvReset(); lv.painted = ""; } else lv.err = null; }
+      schedule();
+    }) || (() => {});
     if (pending) setTimeout(schedule, 6500);
     draw();
     return () => {
+      clearInterval(lvTick); clearTimeout(lvSearchT); offG();
+      document.removeEventListener("visibilitychange", lvWake); window.removeEventListener("focus", lvWake); window.removeEventListener("online", lvWake);
       offs.forEach(f => f()); io?.disconnect(); cancelAnimationFrame(raf); clearTimeout(upHide); upBox.remove();
       document.removeEventListener("keydown", onKey);
       closeViewer(); [...sheets].forEach(c => c());

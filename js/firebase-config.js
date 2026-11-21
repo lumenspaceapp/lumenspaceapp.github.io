@@ -13,3 +13,7 @@ window.FIREBASE_CONFIG = {
 /* Lumi AI: address of the Cloudflare Worker in worker/ (e.g. "https://lumi-ai.<you>.workers.dev").
    Leave empty to use the built-in help guide only. */
 window.LUMI_AI_URL = "";
+
+/* Google Drive live folders: the OAuth "Web application" client ID (Google Cloud console → APIs & Services → Credentials),
+   e.g. "1234-abc.apps.googleusercontent.com". Leave empty to fall back to a Firebase Google pop-up for Drive access. */
+window.GOOGLE_CLIENT_ID = "";
