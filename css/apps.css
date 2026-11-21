@@ -267,7 +267,8 @@
 @media (max-width: 760px) { .app-banner { flex-direction: column; align-items: stretch; } }
 
 /* avatar presets */
-.avatar.preset { background: none !important; }
+.avatar.preset { background: none !important; border-radius: 50%; padding: 0; display: inline-grid; gap: 0; text-align: center; animation: none; } /* not the template-card .preset style */
+.avatar.preset:hover { transform: none; }
 .avatar.preset svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .av-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; }
 .av-opt { display: grid; justify-items: center; gap: 4px; padding: 8px 4px; border-radius: 12px; border: 1.5px solid transparent; transition: transform .25s var(--spring), border-color .2s, background .2s; }
