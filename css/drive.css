@@ -238,7 +238,12 @@
 .dv-spin { width: 26px; height: 26px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--accent); animation: dvSpin .8s linear infinite; display: inline-block; }
 .dvw-imgbox { position: absolute; inset: 0; overflow: auto; display: flex; padding: 12px; }
 .dvw-imgbox.zoomed { cursor: grab; } .dvw-imgbox.panning { cursor: grabbing; }
-.dvw-img { margin: auto; display: block; border-radius: 10px; box-shadow: var(--shadow-lg); object-fit: contain; user-select: none; -webkit-user-drag: none; transition: width .18s var(--ease); background: repeating-conic-gradient(rgba(128, 128, 128, .12) 0 25%, transparent 0 50%) 0 0 / 16px 16px; }
+.dvw-img { margin: auto; display: block; flex: none; max-width: none; border-radius: 10px; box-shadow: var(--shadow-lg); user-select: none; -webkit-user-drag: none; background: repeating-conic-gradient(rgba(128, 128, 128, .12) 0 25%, transparent 0 50%) 0 0 / 16px 16px; }
+.dvw-img.fit { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; }
+.dvw-imgbox { padding-bottom: 64px; } /* room for the zoom bar */
+.dvw-zsep { width: 1px; height: 18px; background: var(--line); margin: 0 3px; }
+.dvw-zb:disabled { opacity: .35; pointer-events: none; }
+button.dvw-zl { border-radius: 8px; height: 30px; } button.dvw-zl:hover { background: var(--hover); color: var(--text); }
 .dvw-zoom { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; align-items: center; gap: 2px; padding: 4px; border-radius: 12px; box-shadow: var(--shadow); z-index: 2; }
 .dvw-zb { min-width: 32px; height: 30px; padding: 0 8px; border-radius: 8px; font-size: 15px; font-weight: 600; color: var(--muted); transition: background .15s, color .15s; }
 .dvw-zb:hover { background: var(--hover); color: var(--text); }

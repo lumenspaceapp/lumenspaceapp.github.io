@@ -244,6 +244,55 @@
   }
   // Preview a Google item inside a viewer stage. Images, PDFs, text and Docs/Slides (as PDF) load through the API with the
   // viewer's token; everything else uses Google's own embed (which relies on the viewer's Google sign-in in this browser).
+  /* image preview: opens fitted to the stage (the whole picture visible), with zoom controls (− % + Fit 1:1),
+     Ctrl/⌘ + wheel or pinch to zoom around the pointer, double-click to toggle Fit / 100%, drag to pan, keys + − 0 */
+  function imageViewer(src, alt) {
+    let zoom = "fit";
+    const img = h("img", { class: "dvw-img fit", src, alt: alt || "", draggable: false });
+    const box = h("div", { class: "dvw-imgbox" }, img), lbl = h("button", { class: "dvw-zl", title: "Fit to screen", text: "Fit", onclick: () => set("fit") });
+    const fitScale = () => {
+      if (!img.naturalWidth) return 1;
+      const cs = getComputedStyle(box), w = box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), hh = box.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+      return Math.min(1, w / img.naturalWidth, hh / img.naturalHeight);
+    };
+    const scale = () => (zoom === "fit" ? fitScale() : zoom);
+    // change the zoom, keeping the point under (cx, cy) (default: the middle of the stage) in place
+    function set(z, cx, cy) {
+      const r = box.getBoundingClientRect(), before = scale();
+      const px = (cx ?? r.left + r.width / 2) - r.left, py = (cy ?? r.top + r.height / 2) - r.top;
+      const ix = (box.scrollLeft + px - img.offsetLeft) / before, iy = (box.scrollTop + py - img.offsetTop) / before; // image pixel under the point
+      zoom = z === "fit" ? "fit" : Math.min(8, Math.max(0.05, z));
+      if (zoom !== "fit" && Math.abs(zoom - fitScale()) < 0.01) zoom = "fit";
+      const s = scale(), fit = zoom === "fit";
+      img.classList.toggle("fit", fit); box.classList.toggle("zoomed", !fit);
+      img.style.width = fit ? "" : Math.round(img.naturalWidth * s) + "px";
+      img.style.height = fit ? "" : Math.round(img.naturalHeight * s) + "px";
+      lbl.textContent = fit ? "Fit" : Math.round(s * 100) + "%";
+      zo.disabled = s <= 0.05 + 1e-6; zi.disabled = s >= 8 - 1e-6;
+      if (!fit) { box.scrollLeft = img.offsetLeft + ix * s - px; box.scrollTop = img.offsetTop + iy * s - py; }
+    }
+    const step = (d, cx, cy) => set(scale() * d, cx, cy);
+    box.addEventListener("wheel", e => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); step(Math.exp(-e.deltaY * (e.deltaMode ? 0.05 : 0.0025)), e.clientX, e.clientY); }, { passive: false });
+    img.addEventListener("dblclick", e => (zoom === "fit" ? set(1, e.clientX, e.clientY) : set("fit")));
+    let pan = null;
+    box.addEventListener("pointerdown", e => { if (zoom === "fit" || e.button !== 0) return; pan = { x: e.clientX, y: e.clientY, l: box.scrollLeft, t: box.scrollTop }; box.setPointerCapture(e.pointerId); box.classList.add("panning"); });
+    box.addEventListener("pointermove", e => { if (!pan) return; box.scrollLeft = pan.l - (e.clientX - pan.x); box.scrollTop = pan.t - (e.clientY - pan.y); });
+    const endPan = () => { pan = null; box.classList.remove("panning"); };
+    box.addEventListener("pointerup", endPan); box.addEventListener("pointercancel", endPan);
+    const onKey = e => {
+      if (!box.isConnected) return removeEventListener("keydown", onKey);
+      if (e.target.closest?.("input, textarea, [contenteditable='true']") || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === "+" || e.key === "=") { e.preventDefault(); step(1.25); } else if (e.key === "-" || e.key === "_") { e.preventDefault(); step(1 / 1.25); } else if (e.key === "0") { e.preventDefault(); set("fit"); }
+    };
+    addEventListener("keydown", onKey);
+    img.onload = () => set(zoom);
+    new ResizeObserver(() => { if (zoom === "fit") set("fit"); }).observe(box);
+    const zb = (t, title, fn) => h("button", { class: "dvw-zb", title, "aria-label": title, text: t, onclick: fn });
+    const zo = zb("−", "Zoom out (−)", () => step(1 / 1.25)), zi = zb("+", "Zoom in (+)", () => step(1.25));
+    const bar = h("div", { class: "dvw-zoom glass-strong" }, zo, lbl, zi, h("span", { class: "dvw-zsep" }),
+      zb("⤢", "Fit to screen (0)", () => set("fit")), zb("1:1", "Actual size", () => set(1)));
+    return [box, bar];
+  }
   async function gPreview(stage, f, still, bag, onMeta) {
     const D = GD(), MB = 1048576;
     stage.className = "dvw-stage gd-stage";
@@ -274,7 +323,7 @@
       if (k === "image" && !D.isGoogleApp(mt) && sz <= 25 * MB) {
         const b = await D.media(id, keys); if (!still()) return;
         const u = URL.createObjectURL(b); bag.push(() => URL.revokeObjectURL(u));
-        return stage.replaceChildren(h("div", { class: "dvw-imgbox" }, h("img", { class: "dvw-img", src: u, alt: f.name || "", draggable: false })));
+        return stage.replaceChildren(...imageViewer(u, f.name));
       }
       if (mt === "application/pdf" && sz <= 40 * MB) {
         const b = await D.media(id, keys); if (!still()) return;
@@ -1603,23 +1652,7 @@
         stage.replaceChildren(h("div", { class: "dvw-load" }, h("span", { class: "dv-spin" })));
         try {
           if (k === "image" && fx.data) {
-            const img = h("img", { class: "dvw-img", src: fx.data, alt: fx.name, draggable: false });
-            const box = h("div", { class: "dvw-imgbox" }, img), lbl = h("span", { class: "dvw-zl", text: "Fit" });
-            const apply = () => {
-              if (zoom === "fit") { img.style.width = ""; img.style.maxWidth = "100%"; img.style.maxHeight = "100%"; box.classList.remove("zoomed"); lbl.textContent = "Fit"; }
-              else { img.style.maxWidth = "none"; img.style.maxHeight = "none"; img.style.width = Math.round((img.naturalWidth || 800) * zoom) + "px"; box.classList.add("zoomed"); lbl.textContent = Math.round(zoom * 100) + "%"; }
-            };
-            const fitScale = () => img.naturalWidth ? img.getBoundingClientRect().width / img.naturalWidth : 1;
-            const z = d => { const s = zoom === "fit" ? fitScale() : zoom; zoom = Math.min(8, Math.max(.05, s * d)); apply(); };
-            box.addEventListener("wheel", e => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); z(e.deltaY < 0 ? 1.15 : 1 / 1.15); }, { passive: false });
-            img.addEventListener("dblclick", () => { zoom = zoom === "fit" ? 1 : "fit"; apply(); });
-            let pan = null;
-            box.addEventListener("pointerdown", e => { if (zoom === "fit" || e.pointerType === "touch") return; pan = { x: e.clientX, y: e.clientY, l: box.scrollLeft, t: box.scrollTop }; box.setPointerCapture(e.pointerId); box.classList.add("panning"); });
-            box.addEventListener("pointermove", e => { if (!pan) return; box.scrollLeft = pan.l - (e.clientX - pan.x); box.scrollTop = pan.t - (e.clientY - pan.y); });
-            box.addEventListener("pointerup", () => { pan = null; box.classList.remove("panning"); });
-            img.onload = apply;
-            const zb = (t, title, fn) => h("button", { class: "dvw-zb", title, text: t, onclick: fn });
-            stage.replaceChildren(box, h("div", { class: "dvw-zoom glass-strong" }, zb("−", "Zoom out", () => z(1 / 1.25)), lbl, zb("+", "Zoom in", () => z(1.25)), zb("⤢", "Fit to screen", () => { zoom = "fit"; apply(); }), zb("1:1", "Actual size", () => { zoom = 1; apply(); })));
+            stage.replaceChildren(...imageViewer(fx.data, fx.name));
           } else if (k === "pdf" && fx.data) {
             try {
               const lib = await pdfjs(); if (!still(my)) return;
