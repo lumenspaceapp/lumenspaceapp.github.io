@@ -198,7 +198,7 @@
   /* ---------- settings block (used in Settings and in the bell menu) ---------- */
   function settingsRows(row) {
     const sw = (on, fn) => { const s = h("span", { class: "switch" + (on ? " on" : ""), style: { cursor: "pointer" } }); s.onclick = () => s.classList.toggle("on", fn()); return s; };
-    const status = h("span");
+    const status = h("span", { class: "nt-status", style: { display: "inline-flex", alignItems: "center", justifyContent: "flex-end" } });
     const paint = () => {
       const p = perm();
       status.replaceChildren(p === "granted" ? sw(prefs.desktop, () => { prefs.desktop = !prefs.desktop; savePrefs(); return prefs.desktop; })
