@@ -32,6 +32,8 @@
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const rad = d => (+d || 0) * Math.PI / 180;
   const rotP = (x, y, a) => { const c = Math.cos(a), s = Math.sin(a); return [x * c - y * s, x * s + y * c]; };
+  // text inside a filled shape stays dark (pastel fills are light in both themes); on no fill it follows the theme
+  const shapeTc = (e, R) => (!e.tc || e.tc === "ink") && (e.color ?? "blue") !== "none" ? "#1d2130" : R(e.tc || "ink", "i");
   const isLine = e => !!e && (e.type === "line" || e.type === "arrow");
   const textual = e => !!e && ["sticky", "text", "shape", "frame"].includes(e.type);
   const lockedByOther = e => !!e && !!e.lockedBy && e.lockedBy !== myKey() && Date.now() - (e.lockedAt || 0) < 30000;
@@ -182,7 +184,7 @@
       const geo = e.shape === "ellipse" ? `<ellipse cx="${w / 2}" cy="${hh / 2}" rx="${f1(Math.max(1, w / 2 - i))}" ry="${f1(Math.max(1, hh / 2 - i))}"`
         : e.shape === "diamond" ? `<polygon points="${w / 2},${i} ${f1(w - i)},${hh / 2} ${w / 2},${f1(hh - i)} ${i},${hh / 2}"`
         : `<rect x="${i}" y="${i}" width="${f1(Math.max(1, w - sw))}" height="${f1(Math.max(1, hh - sw))}" rx="10"`;
-      s = `${geo} style="fill:${R(e.color ?? "blue", "p")};stroke:${st}" stroke-width="${sw}" stroke-linejoin="round"/>` + (full ? svgText(e, R(e.tc || "ink", "i")) : "");
+      s = `${geo} style="fill:${R(e.color ?? "blue", "p")};stroke:${st}" stroke-width="${sw}" stroke-linejoin="round"/>` + (full ? svgText(e, shapeTc(e, R)) : "");
     }
     else if (e.type === "text") s = full ? svgText(e, R(e.color || "ink", "i")) : `<rect y="${f1(hh * .3)}" width="${f1(w * .75)}" height="${f1(Math.max(3, hh * .3))}" rx="2" style="fill:${R(e.color || "ink", "i")}" opacity=".4"/>`;
     else if (e.type === "frame") {
@@ -297,7 +299,7 @@
       const all = Data.list(BC).filter(b => visible(b) && !!b.deleted === trash && (!q || String(b.name || "").toLowerCase().includes(q)))
         .sort((a, b) => (b.edited || b.at || 0) - (a.edited || a.at || 0));
       grid.replaceChildren();
-      if (!trash && editable && !q) grid.append(h("button", { class: "bd-card bd-new", onclick: () => newBoard() }, h("span", { class: "bd-new-plus", text: "+" }), h("span", { text: "New board" })));
+      if (!trash && editable && !q) grid.append(h("button", { class: "bd-card bd-newcard", onclick: () => newBoard() }, h("span", { class: "bd-new-plus", text: "+" }), h("span", { text: "New board" })));
       if (!all.length && (trash || q || !editable)) grid.append(h("div", { class: "bd-none", text: trash ? "Trash is empty" : q ? "No boards match your search" : "No boards yet" }));
       all.forEach((b, i) => {
         const mine = els[b.id] || [], here = liveViewers(b), ed = b.edited || b.at;
@@ -321,7 +323,7 @@
       ], { align: "end" });
       UI.menu(anchor, [
         { label: "Open", icon: "arrow", onClick: () => Apps.go("boards", b.id) },
-        ed ? { label: "Settings", iconHtml: ico(IC.users), onClick: () => editBoard(b) } : null,
+        ed ? { label: "Rename and settings", iconHtml: ico(IC.users), onClick: () => editBoard(b) } : null,
         ed ? { label: "Duplicate", icon: "copy", onClick: () => duplicateBoard(b) } : null,
         ed ? { sep: true } : null,
         ed ? { label: "Move to trash", icon: "trash", danger: true, onClick: () => trashBoard(b) } : null,
@@ -393,8 +395,8 @@
       const ok = h("button", { class: "btn primary", type: "button", text: isNew ? "Create board" : "Save" });
       const body = h("div", { class: "bd-dlg" },
         h("div", { class: "bd-dlg-name" }, iconBtn, name),
-        h("label", { class: "f-row" }, h("span", { text: "Background" }), seg([["dots", "Dots"], ["grid", "Grid"], ["plain", "Plain"]], v.bg, x => (v.bg = x))),
-        h("label", { class: "f-row" }, h("span", { text: "Who can open it" }), seg([["all", "Everyone in the workspace"], ["some", "Chosen people"]], acc, x => { acc = x; paintPpl(); }), ppl),
+        h("div", { class: "f-row" }, h("span", { text: "Background" }), seg([["dots", "Dots"], ["grid", "Grid"], ["plain", "Plain"]], v.bg, x => (v.bg = x))),
+        h("div", { class: "f-row" }, h("span", { text: "Who can open it" }), seg([["all", "Everyone in the workspace"], ["some", "Chosen people"]], acc, x => { acc = x; paintPpl(); }), ppl),
         tplGrid ? h("div", { class: "f-row" }, h("span", { text: "Template" }), tplGrid) : null,
         h("div", { class: "f-actions" }, h("span"), h("span", { style: { display: "flex", gap: "8px" } }, h("button", { class: "btn", type: "button", text: "Cancel", onclick: () => m.close() }), ok)));
       const m = UI.modal(isNew ? "New board" : "Board settings", body, { onClose: () => { if (!done) resolve(null); } });
@@ -502,11 +504,11 @@
       if (!r) { r = { n: h("div", { class: "bd-el", dataset: { id: k } }), ck: null }; nodes.set(k, r); world.append(r.n); fresh = loadedOnce; }
       const n = r.n;
       if (isLine(e)) { paintLine(n, e); n.classList.toggle("bd-found", found.has(k)); return; }
+      if (anim) { n.classList.add("anim"); clearTimeout(n._at); n._at = setTimeout(() => n.classList.remove("anim"), 380); }
+      place(n, e); // size first, so sticky text can be fitted
       const key = ck(e);
       if (key !== r.ck) { paint(n, e); r.ck = key; }
-      if (fresh) { n.classList.add("bd-new"); setTimeout(() => n.classList.remove("bd-new"), 400); }
-      if (anim) { n.classList.add("anim"); clearTimeout(n._at); n._at = setTimeout(() => n.classList.remove("anim"), 380); }
-      place(n, e);
+      if (fresh) { n.classList.add("bd-pop"); setTimeout(() => n.classList.remove("bd-pop"), 400); }
     }
     function place(n, e) {
       n.style.transform = `translate(${e.x}px, ${e.y}px)` + (e.rot ? ` rotate(${e.rot}deg)` : "");
@@ -530,11 +532,13 @@
     }
     function paint(n, e) {
       const t = e.type, sw = +(e.sw ?? DEF[t]?.sw ?? 2) || 0;
+      const keep = ["anim", "bd-pop", "bd-editing", "bd-erasing", "bd-target"].filter(c => n.classList.contains(c));
       n.className = "bd-el bd-" + t + (t === "shape" ? " bd-s-" + (e.shape || "rect") : "") + (e.locked ? " bd-locked" : "") + (found.has(e.id) ? " bd-found" : "");
+      keep.forEach(c => n.classList.add(c));
       n.replaceChildren();
       if (t === "sticky") { n.style.setProperty("--c", fillCss(e.color || "yellow")); n.append(txtDiv(e)); }
       else if (t === "text") n.append(txtDiv(e, inkCss(e.color || "ink")));
-      else if (t === "shape") { n.innerHTML = shapeSVG(e); n.append(txtDiv(e, inkCss(e.tc || "ink"))); }
+      else if (t === "shape") { n.innerHTML = shapeSVG(e); n.append(txtDiv(e, shapeTc(e, cssR))); }
       else if (t === "frame") { n.style.setProperty("--c", e.color && e.color !== "none" ? fillCss(e.color) : "transparent"); n.append(h("div", { class: "bd-ftitle", text: e.text || "Frame" })); }
       else if (t === "pen") {
         const P = (sw || 3) + 10, d = penD(e), w = Math.max(1, e.w) + P * 2, hh = Math.max(1, e.h) + P * 2;
@@ -791,7 +795,7 @@
     function contained(fr) {
       const out = [];
       E.forEach(e => {
-        if (e.id === fr.id || e.locked) return;
+        if (e.id === fr.id || e.locked || lockedByOther(e)) return;
         const b = bbox(e, cur);
         if (b.x >= fr.x - 1 && b.y >= fr.y - 1 && b.x + b.w <= fr.x + fr.w + 1 && b.y + b.h <= fr.y + fr.h + 1) out.push(e.id);
       });
@@ -916,7 +920,7 @@
       clearTimeout(lpT); lpT = 0;
       ptrs.delete(ev.pointerId);
       if (pinch) { if (ptrs.size < 2) pinch = null; return; }
-      if (drag) { const d = drag; drag = null; try { d.up(ev); } catch (e) { console.error(e); } }
+      if (drag) { const d = drag; drag = null; try { d.up(ev); } catch (e) { console.error(e); } scheduleUi(); }
     }
     function onCancel(ev) { ptrs.delete(ev.pointerId); if (pinch && ptrs.size < 2) pinch = null; cancelDrag(); }
     function cancelDrag() { clearTimeout(lpT); lpT = 0; if (drag) { const d = drag; drag = null; try { d.cancel?.(); } catch (e) { console.error(e); } } }
@@ -1354,9 +1358,10 @@
         requestAnimationFrame(() => refitTexts(ids));
       }
     }
+    const modalOpen = () => [...document.querySelectorAll("#layer .backdrop")].some(b => !b.classList.contains("closing"));
     const typingIn = t => !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
     function onPaste(ev) {
-      if (!alive || !ready || typingIn(ev.target) || document.querySelector("#layer .backdrop") || present) return;
+      if (!alive || !ready || typingIn(ev.target) || modalOpen() || present) return;
       const files = [...(ev.clipboardData?.files || [])].filter(f => /^image\//.test(f.type));
       if (files.length) { ev.preventDefault(); return addImages(files); }
       const txt = ev.clipboardData?.getData("text/plain") || "";
@@ -1376,8 +1381,7 @@
     /* ----- keyboard shortcuts ----- */
     function onKey(ev) {
       if (!alive || !ready || !root.isConnected) return;
-      if (document.querySelector("#layer .backdrop")) return;
-      if (typingIn(ev.target)) return;
+      if (modalOpen() || typingIn(ev.target)) return;
       const mod = ev.ctrlKey || ev.metaKey, k = (ev.key || "").toLowerCase();
       if (present) {
         if (["arrowright", "arrowdown", "pagedown", " ", "enter"].includes(k)) { ev.preventDefault(); step(1); }
@@ -1686,7 +1690,7 @@
     function stopPresent(quiet) {
       if (!present) return;
       present = null; root.classList.remove("bd-presenting");
-      if (document.fullscreenElement) try { document.exitFullscreen(); } catch {}
+      if (document.fullscreenElement) try { document.exitFullscreen().catch(() => {}); } catch {}
       if (!quiet) setTimeout(() => fitAll(true), 80);
       scheduleUi();
     }
@@ -1749,8 +1753,8 @@
         { label: "Zoom to fit", kbd: "Shift+1", onClick: () => fitAll(true) }, { label: "50%", onClick: () => zoomTo(.5) }, { label: "100%", kbd: "Ctrl+0", onClick: () => zoomTo(1) }, { label: "200%", onClick: () => zoomTo(2) },
       ]) });
       zoomEl = noFocus(h("div", { class: "bd-zoom glass-strong" }, editable ? undoBtn : null, editable ? redoBtn : null, editable ? h("span", { class: "bd-cb-sep" }) : null,
-        h("button", { class: "icon-btn", title: "Zoom out (Ctrl −)", html: ico(IC.minus), onclick: () => zoomBy(1 / 1.25) }), zoomLbl,
-        h("button", { class: "icon-btn", title: "Zoom in (Ctrl +)", html: ico(IC.plus), onclick: () => zoomBy(1.25) }),
+        h("button", { class: "icon-btn bd-zbtn", title: "Zoom out (Ctrl −)", html: ico(IC.minus), onclick: () => zoomBy(1 / 1.25) }), zoomLbl,
+        h("button", { class: "icon-btn bd-zbtn", title: "Zoom in (Ctrl +)", html: ico(IC.plus), onclick: () => zoomBy(1.25) }),
         h("button", { class: "icon-btn", title: "Zoom to fit (Shift+1)", html: ico(IC.fit), onclick: () => fitAll(true) }),
         h("button", { class: "icon-btn bd-mapbtn", title: "Minimap", html: ico(IC.map), onclick: () => { prefs.map = mapEl.classList.toggle("off") ? false : true; savePrefs(); drawMap(); } })));
       mapCv = h("canvas", { class: "bd-mapcv" });
@@ -1819,6 +1823,8 @@
       stage.addEventListener("pointerup", onUp);
       stage.addEventListener("pointercancel", onCancel);
       stage.addEventListener("wheel", onWheel, { passive: false });
+      stage.addEventListener("mousedown", ev => { if (ev.button === 1) ev.preventDefault(); }); // no auto-scroll on middle-button pan
+      stage.addEventListener("gesturestart", ev => ev.preventDefault()); // Safari: pinch zooms the board, not the page
       stage.addEventListener("contextmenu", ev => {
         ev.preventDefault();
         if (lastPtr === "touch" || ev.target.closest(".bd-editing")) return;

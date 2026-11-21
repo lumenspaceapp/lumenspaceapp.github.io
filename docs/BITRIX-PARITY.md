@@ -14,7 +14,7 @@ Checked against the live Bitrix24 portal (all left-menu sections, their tabs and
 | Read receipts, "typing…", search in chats | ✅ |
 | Channels and broadcast channels (only admins post) | ✅ |
 | Task chats (a chat inside every task) | ⬜ |
-| CoPilot AI in chat | 🟡 (Lumi AI, once the worker is deployed) |
+| CoPilot AI in chat (summarise, suggest replies) | ✅ (switches on when the AI worker is deployed) |
 | Open Channels (WhatsApp, Telegram, site chat for customers), Telephony, Contact center | 🚫 |
 | Webmail (connect a mailbox) | 🚫 (needs a mail server) |
 
@@ -74,8 +74,8 @@ Checked against the live Bitrix24 portal (all left-menu sections, their tabs and
 | Inventory: warehouses, stock receipts, sales orders, transfers, write-offs, stock analytics | ✅ |
 | Sales channels, speech analytics, sales scripts | 🚫 / ⬜ |
 | Sites & online stores, payments & delivery | 🚫 |
-| Marketing: campaigns (email/SMS), segments, ads, templates, blacklist | ⬜ segments & campaign drafts possible; 🚫 actual sending |
-| e-Signature (and e-Signature for HR) | ⬜ simplified in-app signing possible |
+| Marketing: campaigns (email/SMS), segments, templates, blacklist, recipients | ✅ (sending through your mail app or mail-merge export; 🚫 sending from Lumen itself, ads) |
+| e-Signature (and e-Signature for HR) | ✅ (workspace members as signers; external signers later) |
 
 ## 6. Company & HR
 | Bitrix24 | Lumen |
@@ -87,16 +87,16 @@ Checked against the live Bitrix24 portal (all left-menu sections, their tabs and
 | Meetings and briefings (agenda, attendees, minutes, follow-up tasks) | ✅ |
 | Leave requests with approval and leave balances | ✅ |
 | Birthdays & anniversaries | ✅ |
-| Knowledge base (spaces with pages) | 🟡 (Lumen pages, switched off for now) |
+| Knowledge base (spaces with nested articles, versions, search) | ✅ |
 | Login history | 🚫 |
 
 ## 7. Drive, documents & boards
 | Bitrix24 | Lumen |
 |---|---|
 | Shared folders, files, links | ✅ (files up to ~700 KB) |
-| My drive vs company drive, sharing rights, versions, recycle bin, preview, grid view | ⬜ |
+| My drive vs company drive, sharing rights, versions, recycle bin, preview, grid view | ✅ |
 | Online documents, spreadsheets, presentations | ⬜ (documents possible by reusing Lumen pages) |
-| Boards (whiteboards) | ⬜ |
+| Boards (whiteboards) | ✅ |
 | Big files | 🚫 on the free Firebase plan |
 
 ## 8. Automation & analytics
@@ -106,8 +106,8 @@ Checked against the live Bitrix24 portal (all left-menu sections, their tabs and
 | RPA processes (custom pipelines with stages, forms and assigned steps) | ✅ |
 | Lists (custom databases) | ✅ (smart scripts: later) |
 | Approval workflows (leave, expenses, purchases) | ✅ |
-| BI Builder: dashboards for CRM, tasks, automation, employees | 🟡 (CRM reports, Home dashboard) |
-| CoPilot AI (task descriptions, checklists, summaries) | ⬜ after Lumi AI is live |
+| BI Builder: dashboards for CRM, tasks, team, booking, inventory, automation; custom dashboards | ✅ |
+| CoPilot AI (task descriptions, checklists, drafts, summaries) | ✅ (switches on when the AI worker is deployed) |
 
 ## 9. Platform
 | Bitrix24 | Lumen |
@@ -120,6 +120,6 @@ Checked against the live Bitrix24 portal (all left-menu sections, their tabs and
 1. ✅ **Daily work** (shipped 21 Nov 2026): Tasks (calendar / Gantt / planner views, participants & observers, subtasks, tags, reminders, recurring, templates, time tracking, approval, files), Calendar (day view, invitations with accept/decline, recurring events, reminders), Messenger (group chats, replies, pins, files, search, read receipts, task chats), Feed (event & file posts, recipients, read receipts, @mentions).
 2. ✅ **Sales** (shipped 21 Nov 2026): several pipelines, products & catalog, estimates & invoices with PDF, activities, import/export, custom fields, CRM web forms, Booking, Inventory.
 3. ✅ **Company** (shipped 21 Nov 2026): work reports, schedules, meetings & briefings, leave approvals, org chart, project spaces (workgroups + Scrum), Lists & RPA processes, access permissions.
-4. **Extras**: analytics dashboards, whiteboards, e-signature, marketing segments, knowledge base, AI helpers.
+4. ✅ **Extras** (built 22 Nov 2026): analytics dashboards, whiteboards, e-signature, marketing segments, knowledge base, AI helpers.
 
 Limits to keep in mind: on Firebase's free plan a workspace gets about 50,000 reads and 20,000 writes a day and 1 GB of storage, which is plenty for a small team but not for big files or large customer lists.
