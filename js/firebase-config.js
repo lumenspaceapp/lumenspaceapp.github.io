@@ -14,6 +14,10 @@ window.FIREBASE_CONFIG = {
    Leave empty to use the built-in help guide only. */
 window.LUMI_AI_URL = "";
 
+/* Lumen worker (worker/): branded invite emails (/invite) and the public API (/v1). Lumi AI uses it too once LUMI_AI_URL is set
+   (after the ANTHROPIC_API_KEY secret is added to the worker). */
+window.LUMEN_API_URL = "https://lumi-ai.gamerslife1183.workers.dev";
+
 /* Google Drive live folders: the OAuth "Web application" client ID (Google Cloud console → APIs & Services → Credentials),
    e.g. "1234-abc.apps.googleusercontent.com". Leave empty to fall back to a Firebase Google pop-up for Drive access. */
 window.GOOGLE_CLIENT_ID = "152931493861-oq06c3ijigqbam4tvt1rajke9bnldcek.apps.googleusercontent.com"; // public OAuth web client id (not a secret)
