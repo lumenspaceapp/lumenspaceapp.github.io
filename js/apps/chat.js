@@ -313,8 +313,19 @@
           vis ? chatAvatar(id, 40) : h("span", { class: "cx-chav", style: { width: "40px", height: "40px" }, html: svg(IC.lock) }),
           h("span", { class: "cx-head-t" }, h("b", { text: name }), h("span", { class: "app-sub" }, sub))),
         extra,
+        vis && Apps.AI?.available() ? h("button", { class: "icon-btn ai-chat-btn", title: "AI: summarise or suggest replies", text: "✨", onclick: e => UI.menu(e.currentTarget, [
+          { label: "Summarise", iconHtml: "📝", onClick: aiSummary }, canPost(id) ? { label: "Suggest replies", iconHtml: "💡", onClick: aiReplies } : null], { align: "end" }) }) : null,
         vis && canPost(id) ? h("button", { class: "btn cx-call", title: "Start a video call", onclick: call }, h("span", { html: svg(IC.video) }), h("span", { class: "cx-call-t", text: "Video call" })) : null,
         vis ? h("button", { class: "icon-btn", title: "Chat info", html: svg(IC.info), onclick: openInfo }) : null);
+    }
+    // AI helpers (js/ai.js): summary of the last ~100 messages, and reply ideas for the last message from someone else
+    const aiLines = n => curList.filter(m => !m.deleted && !m.kind && String(m.text || "").trim()).slice(-n).map(m => `${person(m.by).name}: ${String(m.text).trim()}`);
+    const aiSummary = () => Apps.AI.compose({ title: "Chat summary", task: "summarize_chat", input: aiLines(100).join("\n"), emptyHint: "There are no messages to summarise yet." });
+    function aiReplies() {
+      const last = curList.filter(m => !m.deleted && !m.kind && m.by !== meKey() && String(m.text || "").trim()).pop();
+      if (!last) return UI.toast("There's no message to reply to yet.");
+      Apps.AI.compose({ title: "Suggested replies", task: "reply_suggestions", input: `${person(last.by).name}: ${last.text}`, context: aiLines(15).join("\n"),
+        pick: line => { input.value = line; autosize(); input.focus(); input.dispatchEvent(new Event("input")); } });
     }
     function pinsFor(id, list) {
       if (isDM(id)) return list.filter(m => m.pinned && !m.deleted);

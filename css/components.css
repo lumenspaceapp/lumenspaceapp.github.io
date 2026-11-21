@@ -337,3 +337,25 @@ html.no-pages #favBtn, html.no-pages #outlineBtn, html.no-pages #pageMenuBtn, ht
 /* stacking inside #layer: side panels (2) < dialogs (4) < menus and pickers (6) — a form opened from a panel shows on top */
 .backdrop { z-index: 4; }
 .pop { z-index: 6; }
+
+/* ===== sign-in gate (js/gate.js): Lumen needs an account ===== */
+.gate { position: fixed; inset: 0; z-index: 95; display: grid; place-items: center; padding: 20px; background: color-mix(in srgb, var(--bg) 55%, transparent);
+  backdrop-filter: blur(22px) saturate(1.3); -webkit-backdrop-filter: blur(22px) saturate(1.3); animation: fadeIn .3s var(--ease); overflow-y: auto; }
+.gate.out { animation: gate-out .36s var(--ease) forwards; }
+@keyframes gate-out { to { opacity: 0; transform: scale(1.02); } }
+body.gated #app { visibility: hidden; }
+.gate-card { width: min(420px, 100%); padding: 34px 30px 26px; border-radius: 26px; box-shadow: var(--shadow-lg); text-align: center; display: flex; flex-direction: column; gap: 12px; animation: pop .45s var(--spring, var(--ease)); }
+.gate-logo img { width: 64px; height: 64px; border-radius: 20px; box-shadow: 0 14px 34px -14px var(--accent); }
+.gate-card h1 { margin: 6px 0 0; font-size: 26px; letter-spacing: -.02em; }
+.gate-sub { margin: 0 0 8px; color: var(--muted); line-height: 1.5; font-size: 14.5px; }
+.gate-wide { width: 100%; justify-content: center; height: 44px; border-radius: 12px; font-size: 14.5px; }
+.gate-google { display: flex; align-items: center; gap: 8px; }
+.gate-g { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: #fff; }
+.gate-or { display: flex; align-items: center; gap: 10px; color: var(--faint); font-size: 12px; margin: 2px 0; }
+.gate-or::before, .gate-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.gate-input { width: 100%; height: 44px; margin: 0; text-align: left; }
+.gate-msg { min-height: 16px; font-size: 12.5px; color: var(--c-red); }
+.gate-fine { margin: 4px 0 0; font-size: 12px; color: var(--faint); line-height: 1.45; }
+.gate-spin { width: 34px; height: 34px; margin: 10px auto 0; border-radius: 50%; border: 3px solid color-mix(in srgb, var(--accent) 25%, transparent); border-top-color: var(--accent); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+body.no-motion .gate, body.no-motion .gate-card { animation: none; }

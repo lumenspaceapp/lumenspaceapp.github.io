@@ -443,6 +443,14 @@
       const newItem = h("input", { class: "menu-input cl-new", placeholder: "+ Add checklist item and press Enter" });
       newItem.onkeydown = e => { if (e.key === "Enter" && newItem.value.trim()) { set({ checklist: [...cl, { id: Data.uid(), t: newItem.value.trim(), done: false }] }); draw(); setTimeout(() => body.querySelector(".cl-new")?.focus(), 30); } };
 
+      // AI helpers (js/ai.js): only when AI is available
+      const ai = Apps.AI?.available(), aiTitle = () => title.textContent.trim() || t.title || "";
+      const aiDesc = ai ? Apps.AI.button("Write description", () => Apps.AI.compose({ title: "Task description", task: "task_description", input: aiTitle(),
+        context: desc.value.trim() ? "Current description:\n" + desc.value : "", insertLabel: desc.value.trim() ? "Replace" : "Use this", onInsert: v => set({ desc: v }) })) : null;
+      const aiList = ai ? Apps.AI.button("Suggest checklist", () => Apps.AI.compose({ title: "Suggested checklist", task: "task_checklist", input: aiTitle(),
+        context: [desc.value.trim(), cl.length ? "Already on the checklist:\n" + cl.map(c => c.t).join("\n") : ""].filter(Boolean).join("\n\n"), insertLabel: "Add to checklist",
+        onInsert: v => set({ checklist: [...(Data.get("tasks", id)?.checklist || []), ...Apps.AI.lines(v).map(x => ({ id: Data.uid(), t: x, done: false }))] }) })) : null;
+
       // subtasks
       const subs = liveTasks().filter(x => x.parentId === id).sort((a, b) => (a.at || 0) - (b.at || 0)), subDone = subs.filter(x => x.status === "done").length;
       const subNew = h("input", { class: "menu-input sub-new", placeholder: "+ Add subtask and press Enter" });
@@ -500,9 +508,9 @@
         h("div", { class: "td-meta" }, "Created by ", Apps.avatar(Data.person(t.by), 18), " ", Data.person(t.by).name, " · ", UI.timeAgo(t.at || Date.now()),
           t.status === "done" && t.completedAt ? " · done " + UI.timeAgo(t.completedAt) : ""),
         appr, statusSel, apprHint, timeBox, grid,
-        h("div", { class: "td-sec", text: "Description" }), desc,
+        h("div", { class: "td-sec tk-sec-row" }, h("span", { text: "Description" }), aiDesc), desc,
         h("div", { class: "td-sec tk-sec-row" }, h("span", { text: `Files${files.length ? ` (${files.length})` : ""}` }), attachBtn), filesEl,
-        h("div", { class: "td-sec" }, `Checklist ${cl.length ? `· ${doneN}/${cl.length}` : ""}`),
+        h("div", { class: "td-sec tk-sec-row" }, h("span", { text: `Checklist ${cl.length ? `· ${doneN}/${cl.length}` : ""}` }), aiList),
         cl.length ? h("div", { class: "progress" }, h("span", { style: { width: (doneN / cl.length) * 100 + "%" } })) : null,
         h("div", { class: "cl" }, ...cl.map(c => h("label", { class: "cl-item" + (c.done ? " done" : "") },
           h("input", { type: "checkbox", checked: c.done, onchange: e => set({ checklist: cl.map(x => x.id === c.id ? { ...x, done: e.target.checked } : x) }) }),

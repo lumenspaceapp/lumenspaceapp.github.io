@@ -33,7 +33,7 @@
     const C = window.Cloud, ws = C?.ws;
     ok(navigator.onLine, navigator.onLine ? "You're online." : "You're offline. Changes are kept and sync when you reconnect.");
     if (!C?.configured) ok("warn", "Sharing isn't connected on this site.");
-    else if (!C.user) ok("warn", "You're not signed in, so you're using a private workspace that only this browser can see. Sign in to share and sync.");
+    else if (!C.user) ok("warn", "You're not signed in yet. Sign in with Google or an email link to open your workspace.");
     else ok(true, `Signed in as <b>${esc(C.user.email)}</b>.`);
     if (ws) {
       const n = (ws.members || []).length;
@@ -43,7 +43,7 @@
       const st = document.getElementById("savedState")?.textContent || "";
       ok(/fail/i.test(st) ? false : true, /fail/i.test(st) ? "Last sync failed. Check your connection and reload." : "Changes are syncing normally.");
       if ((C.workspaces || []).length > 1) ok("warn", `You're a member of ${C.workspaces.length} workspaces. Teammates only see what's in the same one.`);
-    } else if (C?.user) ok("warn", (C.workspaces || []).length ? `You're in your private workspace. You have ${C.workspaces.length} shared workspace(s) in the workspace menu.` : "You don't have a shared workspace yet. Create one to work with others.");
+    } else if (C?.user) ok("warn", (C.workspaces || []).length ? `No workspace is open. Pick one of your ${C.workspaces.length} workspace(s) in the workspace menu.` : "You don't have a workspace yet. Create one from the workspace menu.");
     const others = (C?.people || []).filter(p => p.uid !== C?.user?.uid && p.at && Date.now() - p.at.toMillis() < 70000).length;
     if (ws) ok(true, others ? `${others} teammate(s) online right now.` : "No teammates online right now.");
     if (!CSS.supports("backdrop-filter", "blur(2px)") && !CSS.supports("-webkit-backdrop-filter", "blur(2px)")) ok("warn", "This browser can't show the glass blur. Try Chrome, Edge or Safari.");
@@ -115,7 +115,7 @@
     return [
       `Screen: ${screen}`,
       `Signed in: ${C?.user ? "yes" : "no"}`,
-      ws ? `Workspace: shared "${ws.name}", ${(ws.members || []).length} member(s), user is ${ws.owner === C.user?.uid ? "the owner" : "not the owner"}` : "Workspace: private (only on this device)",
+      ws ? `Workspace: shared "${ws.name}", ${(ws.members || []).length} member(s), user is ${ws.owner === C.user?.uid ? "the owner" : "not the owner"}` : "Workspace: none open yet",
       `Shared workspaces they belong to: ${(C?.workspaces || []).length}`,
       `Teammates online now: ${(C?.people || []).filter(p => p.uid !== C?.user?.uid && p.at && Date.now() - p.at.toMillis() < 70000).length}`,
       `Sync status: ${document.getElementById("savedState")?.textContent || "unknown"}`,

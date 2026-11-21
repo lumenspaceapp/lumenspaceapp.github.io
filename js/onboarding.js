@@ -195,12 +195,18 @@
   };
 
   /* Signed in for the first time with no workspaces: build them a cloud workspace */
-  Onboarding.newAccount = async user => {
+  Onboarding.newAccount = async (user, opts = {}) => {
     if (Onboarding.active) return;
     Onboarding.active = true;
     localStorage.setItem("lumen-onboarded-" + user.uid, "1");
     try {
-      await show({ accountStep: false, user, build: async a => { applyLook(a); await Cloud.createFrom(a.wsName, Templates.build(a), a.icon); } });
+      const res = await show({ accountStep: false, user, build: async a => { applyLook(a); await Cloud.createFrom(a.wsName, Templates.build(a), a.icon); } });
+      // sign-in is required and there is no device-only workspace: skipping setup still creates one
+      if (!res && opts.force && !Cloud.ws) {
+        const first = (user.displayName || "").trim().split(" ")[0];
+        const a = { name: user.displayName || "", use: "team", picks: [...Templates.USES.team.defaults], wsName: first ? `${first}'s Workspace` : "My Workspace", icon: "✨" };
+        await Cloud.createFrom(a.wsName, Templates.build(a), a.icon);
+      }
     } finally { Onboarding.active = false; }
   };
 

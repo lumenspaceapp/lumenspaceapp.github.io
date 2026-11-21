@@ -1009,7 +1009,13 @@
       const save = () => { clearTimeout(timer); timer = null; if (!write || ta.value === last) return; last = ta.value; Data.update("meetings", m.id, { minutes: ta.value, minutesAt: Date.now(), minutesBy: ME() }); saved.textContent = "Saved"; };
       ta.oninput = () => { saved.textContent = "Editing…"; clearTimeout(timer); timer = setTimeout(save, 2500); };
       ta.onblur = save; S.flush = save;
-      const minutes = h("section", { class: "co-card glass co-mins" }, h("div", { class: "co-card-h" }, h("h3", { text: "Minutes" }), saved), ta);
+      // AI summary (js/ai.js) from agenda + minutes + decisions, added to the minutes
+      const aiSum = write && Apps.AI?.available() ? Apps.AI.button("Summarise meeting", () => Apps.AI.compose({ title: "Meeting summary", task: "summarize_meeting",
+        input: [ag.length ? "Agenda:\n" + ag.map(a => "- " + a.text + (a.done ? " (done)" : "")).join("\n") : "", ta.value.trim() ? "Minutes:\n" + ta.value.trim() : "", decs.length ? "Decisions:\n" + decs.map(d => "- " + d.text).join("\n") : ""].filter(Boolean).join("\n\n"),
+        context: `${m.title || "Meeting"} · ${m.date || ""}`, emptyHint: "Add an agenda, minutes or decisions first.", insertLabel: "Add to minutes",
+        onInsert: v => { save(); const cur = String(Data.get("meetings", m.id)?.minutes || "").trimEnd(), next = (cur ? cur + "\n\n" : "") + v;
+          ta.value = last = next; Data.update("meetings", m.id, { minutes: next, minutesAt: Date.now(), minutesBy: ME() }); saved.textContent = "Saved"; } })) : null;
+      const minutes = h("section", { class: "co-card glass co-mins" }, h("div", { class: "co-card-h" }, h("h3", { text: "Minutes" }), saved, aiSum), ta);
       return h("div", { class: "co-meet" }, header, h("div", { class: "co-meet-grid" }, h("div", { class: "co-meet-col" }, agenda, decisions), minutes));
     }
 

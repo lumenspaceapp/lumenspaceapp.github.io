@@ -15,7 +15,7 @@ function setupModal() {
     h("a", { class: "btn primary", href: "https://github.com/lumenspaceapp/lumenspaceapp.github.io/blob/main/SETUP.md", target: "_blank", text: "Open setup guide" })));
 }
 
-if (Cloud.configured) init().catch(e => { console.error(e); UI.toast("Couldn't load sharing: " + e.message); App.bootLocal?.(); });
+if (Cloud.configured) init().catch(e => { console.error(e); UI.toast("Couldn't connect to Lumen: " + e.message); window.Gate?.show("signin"); });
 else App.bootLocal?.();
 
 async function init() {
@@ -33,7 +33,8 @@ async function init() {
   a.onAuthStateChanged(auth, async user => {
     Cloud.user = user; renderAccount();
     if (listUnsub) { listUnsub(); listUnsub = null; }
-    if (!user) { if (Cloud.ws) leave(true); App.bootLocal?.(); return; }
+    if (!user) { if (Cloud.ws) leave(true); App.bootLocal?.(); window.Gate?.show("signin"); return; } // sign-in is required
+    window.Gate?.show("loading");
     const email = user.email.toLowerCase();
     // Cloud.listed resolves once we know (from the server, not just the local cache) which workspaces this user is in.
     let listed; Cloud.listed = new Promise(r => (listed = r)); Cloud.listedFor = user.uid;
@@ -43,30 +44,42 @@ async function init() {
       if (!snap.metadata.fromCache) listed();
     }, e => { console.warn(e); listed(); });
     await Cloud.listed;
+    window.Gate?.hide();
     if (Onboarding.active) return; // the setup wizard is driving
     const link = location.hash.match(/^#\/ws\/([^/]+)(?:\/p\/(.+))?$/);
-    const last = localStorage.getItem("lumen-active-ws");
-    let want = link ? link[1] : last && last !== "local" ? last : null;
-    if (!want && !link && last !== "local" && Cloud.workspaces.length) want = Cloud.workspaces[0].id; // returning user on a new device
-    if (want) return open(want, link?.[2]);
-    App.bootLocal?.();
-    // brand-new account with nothing yet: set up a workspace for them, Notion-style
-    if (!Cloud.workspaces.length && last !== "local" && !localStorage.getItem("lumen-onboarded-" + user.uid)) Onboarding.newAccount(user);
+    if (link) return open(link[1], link[2]);
+    ensureWorkspace();
   });
 }
+
+// signed in but no workspace open: open the last one (or the first), or set up a new one — there is no device-only mode
+const failedWs = new Set();
+function ensureWorkspace() {
+  if (!Cloud.user || Cloud.ws || Onboarding.active) return;
+  const ok = Cloud.workspaces.filter(w => !failedWs.has(w.id)), last = localStorage.getItem("lumen-active-ws");
+  const want = ok.find(w => w.id === last) || ok[0];
+  if (want) return open(want.id);
+  App.bootLocal?.();
+  Onboarding.newAccount(Cloud.user, { force: true });
+}
+Cloud.ensureWorkspace = ensureWorkspace;
 
 /* ---------- emailed invites (Firebase email-link sign-in) ---------- */
 // The invite email links to  <site>/?ws=<id>&mode=signIn&oobCode=…  Turn it into a signed-in visit to #/ws/<id>.
 async function handleInviteLanding() {
   const params = new URLSearchParams(location.search);
   const wsId = params.get("ws");
-  if (!wsId) return;
-  const clean = () => history.replaceState(null, "", location.pathname + "#/ws/" + wsId);
-  if (!fb.isSignInWithEmailLink(auth, location.href)) return clean();
+  const isLink = fb.isSignInWithEmailLink(auth, location.href);
+  if (!wsId && !isLink) return;
+  const clean = () => history.replaceState(null, "", location.pathname + (wsId ? "#/ws/" + wsId : "#/p/home"));
+  if (!isLink) return clean();
   await auth.authStateReady();
   if (auth.currentUser) return clean(); // already signed in on this device
   const href = location.href;
   clean();
+  // same device that asked for the link: we know the address, so finish signing in right away
+  const saved = localStorage.getItem("lumen-invite-email");
+  if (saved) { try { await fb.signInWithEmailLink(auth, saved, href); localStorage.removeItem("lumen-invite-email"); return; } catch (e) { console.warn(e); } }
   const inp = h("input", { class: "menu-input", type: "email", placeholder: "you@gmail.com", value: localStorage.getItem("lumen-invite-email") || "" });
   const msg = h("div", { style: { fontSize: "13px", color: "var(--c-red)", minHeight: "18px" } });
   const go = h("button", { class: "btn primary", text: "Join workspace" });
@@ -88,8 +101,14 @@ async function handleInviteLanding() {
   };
   go.onclick = submit;
   inp.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
-  google.onclick = async () => { m.close(); if (await signIn()) open(wsId); };
+  google.onclick = async () => { m.close(); if (await signIn() && wsId) open(wsId); };
 }
+// sign in without Google: email a one-time link back to this site
+Cloud.emailSignIn = async email => {
+  if (!auth) throw new Error("Still loading, try again in a second");
+  localStorage.setItem("lumen-invite-email", email);
+  await fb.sendSignInLinkToEmail(auth, email, { url: `${location.origin}${location.pathname}?signin=1`, handleCodeInApp: true });
+};
 async function emailInvite(email) {
   const url = `${location.origin}${location.pathname}?ws=${Cloud.ws.id}`;
   await fb.sendSignInLinkToEmail(auth, email, { url, handleCodeInApp: true });
@@ -106,7 +125,7 @@ async function signIn() {
     return false;
   }
 }
-async function signOutNow() { if (Cloud.ws) leave(true); await fb.signOut(auth); UI.toast("Signed out"); }
+async function signOutNow() { signingOut = true; try { if (Cloud.ws) leave(true); await fb.signOut(auth); UI.toast("Signed out"); } finally { signingOut = false; } }
 
 function renderAccount() {
   const b = document.getElementById("accountBtn"); if (!b) return;
@@ -164,7 +183,7 @@ async function open(id, pageId) {
   };
   const myRef = wsRef; let ownerEmailAsked = false;
   unsubs.push(fb.onSnapshot(wsRef, snap => {
-    if (!snap.exists()) { UI.toast("That shared workspace no longer exists"); return leave(true); }
+    if (!snap.exists()) { UI.toast("That shared workspace no longer exists"); return leave(true, true); }
     const d = snap.data();
     Object.assign(ws, { name: d.name, icon: d.icon || "", members: d.members || [], owner: d.owner, ownerEmail: d.ownerEmail, roles: d.roles || {}, perms: d.perms || {} });
     // older workspaces don't store the owner's email (access roles need it): the owner adds it, only they may write it
@@ -178,7 +197,7 @@ async function open(id, pageId) {
     wsLoaded = true;
     if (activated) { App.remoteUpdate({ tree: true }); window.Apps?.Access?.changed(); } else activate(); // roles / perms changed live
 
-  }, e => { UI.toast(e.code === "permission-denied" ? `No access. Ask the owner to invite ${Cloud.user.email}` : "Sync error: " + e.message); leave(true); }));
+  }, e => { UI.toast(e.code === "permission-denied" ? `No access. Ask the owner to invite ${Cloud.user.email}` : "Sync error: " + e.message); leave(true, true); }));
 
   unsubs.push(fb.onSnapshot(pagesCol, snap => {
     const changed = [];
@@ -206,13 +225,15 @@ async function open(id, pageId) {
   }, () => {}));
 }
 function stopSubs() { unsubs.forEach(u => u()); unsubs = []; clearInterval(beatTimer); Cloud.people = []; renderPresence(); }
-function leave(silent) {
+let signingOut = false;
+function leave(silent, failed) {
   if (Cloud.ws && Cloud.user && wsRef) fb.deleteDoc(fb.doc(wsRef, "presence", Cloud.user.uid)).catch(() => {});
   stopSubs(); Cloud.ws = null; wsRef = null; Store.useCloud(null); setSaved("Saved");
-  // remember an explicit switch to the private workspace; otherwise forget the last shared one
-  silent ? localStorage.removeItem("lumen-active-ws") : localStorage.setItem("lumen-active-ws", "local");
+  if (failed && Cloud.ws?.id) failedWs.add(Cloud.ws.id);
+  localStorage.removeItem("lumen-active-ws");
   App.onWorkspaceChange();
-  if (!silent) UI.toast("💻 Switched to this browser's private workspace");
+  // still signed in (workspace deleted, access removed…): move on to another workspace, or set one up
+  if (Cloud.user && !signingOut) setTimeout(ensureWorkspace, 50);
 }
 
 /* ---------- pushing local edits ---------- */
@@ -342,8 +363,7 @@ function renderPresence() {
 
 /* ---------- menus used by the app shell ---------- */
 Cloud.workspaceMenuItems = () => {
-  const items = [{ section: "Workspaces" },
-    { label: "This browser (private)", iconHtml: "<span>💻</span>", kbd: Cloud.ws ? "" : "✓", onClick: () => Cloud.ws && leave() }];
+  const items = [{ section: "Workspaces" }];
   Cloud.workspaces.forEach(w => items.push({ label: w.name, iconHtml: "<span>👥</span>", kbd: Cloud.ws?.id === w.id ? "✓" : "", onClick: () => Cloud.ws?.id !== w.id && open(w.id) }));
   if (Cloud.ws && window.Apps?.Access && Apps.isAdmin()) items.push({ label: "Access & roles…", icon: "lock", onClick: () => Apps.Access.open() });
   items.push({ sep: true });

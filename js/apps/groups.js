@@ -918,8 +918,8 @@
     function draw() {
       const g = Data.get("projects", id); if (!g) return;
       const member = isMember(g) && !g.archived, folder = g.folder, me = meKey();
-      const subs = folder ? Data.list("folders").filter(f => f.parent === folder).sort((a, b) => String(a.name).localeCompare(String(b.name))) : [];
-      const files = folder ? Data.list("files").filter(f => f.folder === folder).sort((a, b) => (b.at || 0) - (a.at || 0)) : [];
+      const subs = folder ? Data.list("folders").filter(f => f.parent === folder && !f.deleted).sort((a, b) => String(a.name).localeCompare(String(b.name))) : [];
+      const files = folder ? Data.list("files").filter(f => f.folder === folder && !f.deleted).sort((a, b) => (b.at || 0) - (a.at || 0)) : [];
       const bar = h("div", { class: "app-toolbar" }, h("span", { class: "gr-mute", text: files.length ? plural(files.length, "file") + " · up to 700 KB each" : "Files up to 700 KB each" }), h("span", { class: "grow" }),
         folder ? h("button", { class: "btn", text: "Open in Drive", onclick: () => Apps.go("drive", folder) }) : null,
         member ? h("button", { class: "btn", text: "🔗 Add link", onclick: addLink }) : null,
@@ -935,7 +935,7 @@
         !subs.length && !files.length ? Apps.empty("🗂️", member ? "Drop files here or use Upload. They're shared with everyone in the group." : "No files yet.", member ? h("button", { class: "btn primary", text: "⬆ Upload", onclick: () => fileIn.click() }) : null)
           : h("div", { class: "gr-files glass" },
             ...subs.map(f => h("div", { class: "gr-file", role: "button", tabindex: 0, onclick: () => Apps.go("drive", f.id) }, h("span", { class: "gr-file-ic", text: "📁" }),
-              h("span", { class: "gr-file-t" }, h("b", { text: f.name }), h("small", { text: plural(Data.list("files").filter(x => x.folder === f.id).length, "file") })))),
+              h("span", { class: "gr-file-t" }, h("b", { text: f.name }), h("small", { text: plural(Data.list("files").filter(x => x.folder === f.id && !x.deleted).length, "file") })))),
             ...files.map(row)),
         fileIn);
     }

@@ -176,9 +176,16 @@
     paintTo();
 
     const pubBtn = h("button", { class: "btn primary", text: "Publish", onclick: publish });
+    // AI helpers (js/ai.js): only when AI is available
+    const ai = Apps.AI?.available(), aiPut = v => { text.value = v; grow(); text.focus(); };
+    const aiBtns = ai ? [
+      Apps.AI.button("Draft", () => Apps.AI.compose({ title: "Draft a post", task: "post_draft", input: text.value, emptyHint: "Type a few words about your post, then tap Draft.", insertLabel: "Use this", onInsert: aiPut }), { title: "Write a post from a few words" }),
+      Apps.AI.button("Improve", () => Apps.AI.compose({ title: "Improve your post", task: "rewrite", input: text.value, emptyHint: "Write your post first, then tap Improve.", insertLabel: "Replace", onInsert: aiPut }), { title: "Rewrite in another tone" }),
+    ] : [];
     const bar = h("div", { class: "fc-bar" },
       h("button", { type: "button", class: "icon-btn fd-attach", title: "Attach files", text: "📎", onclick: pickInto }),
       h("button", { type: "button", class: "icon-btn fd-at", title: "Mention someone", text: "@", onclick: () => { const p = text.selectionStart ?? text.value.length, pre = text.value.slice(0, p); const ins = (pre && !/\s$/.test(pre) ? " " : "") + "@"; text.value = pre + ins + text.value.slice(p); text.focus(); text.selectionStart = text.selectionEnd = p + ins.length; text.dispatchEvent(new Event("input")); } }),
+      ...aiBtns,
       h("span", { class: "grow" }),
       h("button", { type: "button", class: "btn fd-cancel", text: "Cancel", onclick: () => reset() }), pubBtn);
     const extra = h("div", { class: "fd-extra" }, evBox, pollBox, thanksBox, filesBox, toRow, bar);

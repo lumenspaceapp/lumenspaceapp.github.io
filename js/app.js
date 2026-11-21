@@ -275,10 +275,10 @@
   applySettings(); syncSidebar();
   // If a shared workspace will open (last used, or an invite link), wait for cloud.js instead of flashing the private one.
   const lastWs = localStorage.getItem("lumen-active-ws");
-  const cloudPending = window.FIREBASE_CONFIG?.apiKey && ((lastWs && lastWs !== "local") || location.hash.startsWith("#/ws/"));
+  const cloudPending = !!window.FIREBASE_CONFIG?.apiKey; // sign-in is required: cloud.js opens the workspace once you're signed in
   if (cloudPending) {
     document.getElementById("view").innerHTML = '<div class="big-empty" style="padding-top:30vh"><div>👥</div>Opening shared workspace…</div>';
-    setTimeout(() => App.bootLocal(), 8000);
+    setTimeout(() => { if (!window.Cloud?.user) App.bootLocal(); }, 8000); // keep the shell usable behind the sign-in screen
   } else boot();
   // First visit in this browser (and not arriving from an invite): run the Notion-style setup wizard.
   if (Store.firstRun && !cloudPending && location.hash !== "#/migrate" && !/[?&]ws=/.test(location.search)) setTimeout(() => Onboarding.firstRun(), 500);

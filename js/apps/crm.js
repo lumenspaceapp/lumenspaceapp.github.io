@@ -434,7 +434,14 @@
       type = k; seg.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === e.currentTarget)); paint(); subj.focus();
     } }, ic + " " + l)));
     function paintWho() { const p = Data.person(owner); who.replaceChildren(Apps.avatar(p, 18), h("span", { text: owner === me() ? "Me" : p.name })); }
+    // AI email draft (js/ai.js), shown for the email type when AI is available
+    const aiCtx = () => { const r = Data.get(col, id) || {}; return [`${cap(typeLabel(col))}: ${recName(r)}`, r.company ? "Company: " + name("companies", r.company) : r.companyName ? "Company: " + r.companyName : "",
+      col === "deals" || col === "items" ? "Stage: " + stageOf(col, r).name : col === "leads" && r.status ? "Lead status: " + r.status : "", r.amount ? "Amount: " + Apps.money(r.amount) : "",
+      "Recent activity:", ...actsFor(col, id).sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, 8).map(a => `- ${ATYPES[a.type]?.[1] || "Activity"}${a.done ? "" : " (planned)"}: ${a.subject || ""}`)].filter(Boolean).join("\n"); };
+    const aiMail = Apps.AI?.available() ? Apps.AI.button("Draft email", () => Apps.AI.compose({ title: "Draft email", task: "email_draft", input: subj.value.trim() || "A friendly follow-up on where things stand",
+      context: aiCtx(), insertLabel: "Use this", onInsert: v => { subj.value = v; subj.focus(); } })) : null;
     function paint() {
+      if (aiMail) aiMail.hidden = type !== "email";
       subj.placeholder = type === "note" ? "Write a comment… (Enter to post, @ to mention)" : "What needs to happen? e.g. " + HINTS[type];
       go.textContent = type === "note" ? "Comment" : "Plan " + ATYPES[type][1].toLowerCase();
       plan.hidden = type === "note";
@@ -455,7 +462,7 @@
     subj.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && type === "note") { e.preventDefault(); save(); } });
     Apps.mentionAssist(subj);
     paint(); paintWho();
-    return h("div", { class: "crm-composer glass" }, seg, subj, h("div", { class: "crm-act-foot" }, plan, h("span", { class: "grow" }), go));
+    return h("div", { class: "crm-composer glass" }, seg, subj, h("div", { class: "crm-act-foot" }, plan, h("span", { class: "grow" }), aiMail, go));
   }
 
   /* ---------- timeline: old inline activities + activities + history + comments, newest first ---------- */
