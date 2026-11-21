@@ -35,10 +35,11 @@ async function signInLink(env, email, continueUrl) {
 }
 
 async function sendMail(env, { to, subject, html, text, replyTo, replyName }) {
-  const from = env.MAIL_FROM, fromName = env.MAIL_FROM_NAME || env.BRAND_NAME || "Lumen";
+  // trim: values pasted into `wrangler secret put` can carry a stray newline or BOM
+  const from = String(env.MAIL_FROM || "").replace(/^﻿/, "").trim(), fromName = String(env.MAIL_FROM_NAME || env.BRAND_NAME || "Lumen").trim();
   if (env.BREVO_API_KEY) {
     const res = await fetch("https://api.brevo.com/v3/smtp/email", {
-      method: "POST", headers: { "api-key": env.BREVO_API_KEY, "Content-Type": "application/json", Accept: "application/json" },
+      method: "POST", headers: { "api-key": String(env.BREVO_API_KEY).trim(), "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ sender: { email: from, name: fromName }, to: [{ email: to }], subject, htmlContent: html, textContent: text,
         ...(replyTo ? { replyTo: { email: replyTo, name: replyName || replyTo } } : {}), tags: ["invite"] }),
     });
@@ -46,7 +47,7 @@ async function sendMail(env, { to, subject, html, text, replyTo, replyName }) {
     return;
   }
   const res = await fetch("https://api.resend.com/emails", {
-    method: "POST", headers: { Authorization: "Bearer " + env.RESEND_API_KEY, "Content-Type": "application/json" },
+    method: "POST", headers: { Authorization: "Bearer " + String(env.RESEND_API_KEY).trim(), "Content-Type": "application/json" },
     body: JSON.stringify({ from: `${fromName} <${from}>`, to: [to], subject, html, text, ...(replyTo ? { reply_to: replyTo } : {}) }),
   });
   if (!res.ok) { const j = await res.json().catch(() => ({})); console.error("resend", res.status, j); throw new ApiError(502, "send_failed", "The email service refused the message (" + (j.message || res.status) + ")."); }
