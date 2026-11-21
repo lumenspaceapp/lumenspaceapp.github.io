@@ -12,7 +12,7 @@
   function show(opts) {
     return new Promise(resolve => {
       const a = { name: (opts.user?.displayName || "").trim(), use: "personal", picks: [], wsName: "", icon: "✨",
-        avatar: Store.local.settings.avatar ?? (opts.user?.photoURL ? "" : "spark"), accent: Store.local.settings.accent || ACCENTS[0], theme: document.documentElement.dataset.theme || "light" };
+        avatar: Store.local.settings.avatarChosen ? Store.local.settings.avatar : null /* picking one is required */, accent: Store.local.settings.accent || ACCENTS[0], theme: document.documentElement.dataset.theme || "light" };
       const stage = h("div", { class: "ob-stage" });
       const dots = h("div", { class: "ob-dots" });
       const card = h("div", { class: "ob-card glass-strong" },
@@ -75,8 +75,11 @@
         return [h("h2", { text: "How do you want to use Lumen?" }),
           h("p", { class: "ob-sub", text: PAGES() ? "This helps us suggest the right pages. You can change everything later." : "You can change everything later." }),
           cards, h("label", { class: "ob-label", text: "What should we call you?" }), name,
-          h("label", { class: "ob-label", text: "Pick an avatar" }), avs,
-          nav("Continue", () => { if (!a.picks.length) a.picks = [...Templates.USES[a.use].defaults]; go(at + 1); })];
+          h("label", { class: "ob-label", text: "Pick an avatar (required)" }), avs,
+          nav("Continue", () => {
+            if (a.avatar == null) { avs.classList.add("shake"); setTimeout(() => avs.classList.remove("shake"), 500); avs.scrollIntoView({ block: "center", behavior: "smooth" }); return UI.toast("Pick an avatar to continue"); }
+            if (!a.picks.length) a.picks = [...Templates.USES[a.use].defaults]; go(at + 1);
+          })];
       }
 
       /* step: what for */
@@ -163,7 +166,7 @@
   // apply the chosen look to this device's settings
   function applyLook(a) {
     const s = Store.local.settings;
-    s.accent = a.accent; s.theme = a.theme; s.avatar = a.avatar ?? s.avatar; if (!Store.isCloud) { s.wsName = a.wsName; s.wsIcon = a.icon; }
+    s.accent = a.accent; s.theme = a.theme; s.avatar = a.avatar ?? s.avatar; if (a.avatar != null) s.avatarChosen = true; if (!Store.isCloud) { s.wsName = a.wsName; s.wsIcon = a.icon; }
     Store.save(true);
   }
 

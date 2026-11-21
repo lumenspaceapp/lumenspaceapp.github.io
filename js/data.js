@@ -111,11 +111,13 @@
     syncMe() {
       if (!cloud()) return;
       const me = Data.me(), cur = Data.get("people", me.key), name = me.accountName || me.name;
-      if (!cur || cur.name !== name || cur.photo !== me.photo || (cur.avatar || "") !== me.avatar) Data.update("people", me.key, { name, photo: me.photo, email: me.email, avatar: me.avatar });
+      const chosen = !!Store.local.settings.avatarChosen;
+      if (!cur || cur.name !== name || cur.photo !== me.photo || (cur.avatar || "") !== me.avatar || (chosen && !cur.avatarChosen))
+        Data.update("people", me.key, { name, photo: me.photo, email: me.email, avatar: me.avatar, ...(chosen ? { avatarChosen: true } : {}) });
     },
     // change my avatar: remembered on this device and saved to my profile in the current workspace
     setAvatar(id) {
-      Store.local.settings.avatar = id; Store.save(true);
+      Store.local.settings.avatar = id; Store.local.settings.avatarChosen = true; Store.save(true);
       const me = Data.me();
       if (cloud()) Data.syncMe(); else Data.update("people", "me", { avatar: id });
       window.Cloud?.here?.(); window.Cloud?.renderAccount?.();

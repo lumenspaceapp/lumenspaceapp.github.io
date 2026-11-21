@@ -396,11 +396,42 @@
   const money = n => { try { return new Intl.NumberFormat(undefined, { style: "currency", currency: currency(), maximumFractionDigits: 0 }).format(+n || 0); } catch { return (+n || 0).toLocaleString(); } };
   const empty = (ic, text, btn) => h("div", { class: "app-empty" }, h("div", { class: "ae-ic", text: ic }), h("div", { text }), btn || null);
 
-  async function chooseAvatar() {
+  async function chooseAvatar(opts = {}) {
     const me = Data.me();
+    if (opts.required) { // everyone has an avatar: this one can't be skipped (closing it just asks again)
+      let v = null;
+      while (!v) {
+        v = await form("Pick your avatar 👋", [{ key: "avatar", label: "Everyone in Lumen has one. It's shown next to your name in chat, comments, tasks and the team directory. You can change it anytime in Settings.", type: "avatar", photo: me.photo, person: me }],
+          { avatar: me.avatar || (me.photo ? "" : Avatars.PRESETS[0].id) }, { ok: "Use this avatar" });
+        if (!v) UI.toast("Please pick an avatar to continue");
+      }
+      Data.setAvatar(v.avatar); UI.toast("✨ Looking good!"); return;
+    }
     const v = await form("Choose your avatar", [{ key: "avatar", label: "Shown next to your name in chat, comments, tasks and the team directory", type: "avatar", photo: me.photo, person: me }], { avatar: me.avatar || "" }, { ok: "Use this avatar", width: 560 });
     if (v) { Data.setAvatar(v.avatar); UI.toast("✨ Avatar updated"); }
   }
+
+  /* every person needs an avatar: accounts made before this rule get a default one (they can change it), new accounts must pick */
+  const AVATAR_RULE_SINCE = Date.parse("2026-11-22T00:00:00Z");
+  const defaultAvatar = key => { let x = 0; for (const c of String(key)) x = (x * 31 + c.charCodeAt(0)) >>> 0; return Avatars.PRESETS[x % Avatars.PRESETS.length].id; };
+  let avatarCheck = 0;
+  async function ensureAvatar() {
+    const run = ++avatarCheck;
+    if (!window.Cloud?.ws || !Cloud.user || window.Onboarding?.active || !window.Avatars) return;
+    // wait until my profile has loaded from the server (or a few seconds)
+    const me = Data.me().key;
+    for (let i = 0; i < 16 && !Data.get("people", me); i++) await new Promise(r => setTimeout(r, 250));
+    if (run !== avatarCheck || !Cloud.ws || document.querySelector(".ob")) return;
+    const s = Store.local.settings, prof = Data.get("people", me) || {};
+    if (s.avatarChosen && prof.avatarChosen) return;
+    const cur = s.avatar ?? prof.avatar;
+    if (s.avatarChosen || prof.avatarChosen || (cur && (Avatars.has(cur) || cur === "letter"))) return Data.setAvatar(cur ?? defaultAvatar(me)); // chosen before: just remember it
+    const created = Date.parse(Cloud.user.metadata?.creationTime || "") || 0;
+    if (created && created < AVATAR_RULE_SINCE) { Data.setAvatar(defaultAvatar(me)); UI.toast("🎨 We gave you an avatar. Change it anytime in Settings → Your profile."); return; }
+    chooseAvatar({ required: true });
+  }
+  Apps.onWorkspace.add(() => setTimeout(ensureAvatar, 1200));
+  Apps.ensureAvatar = ensureAvatar;
 
   Object.assign(Apps, { chooseAvatar, avatar, avatars, colorFor, personPicker, peoplePicker, form, panel, header, tabs, iso, today, addDays, fmtDate, money, currency, empty,
     pickFiles, attach, openFile, fileChip, fileSize, mentioned, mentionAssist, handleOf, liveTasks, isMyTask, canSeeChat, eventsBetween });
