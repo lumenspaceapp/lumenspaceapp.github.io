@@ -5,7 +5,8 @@
    API for every app:  Apps.role(key?), Apps.level(key?) → 0 owner … 4 guest, Apps.isAdmin(key?) (admin or owner), Apps.isManager(key?) (manager or above),
    Apps.canManage(key, action, ctx?) — action "editProfile"|"remove"|"setLevel"|"moderate"|"reassign"|"invite"; ctx { group: projectId } or { channel: channelId } for "moderate",
    Apps.can(area, level = "view"|"edit"|"admin"), Apps.onAccess (Set of callbacks), Apps.Access.open(tab?) opens the "Members & levels" window.
-   Note: permissions hide areas inside the app; Firestore still lets every member read and write app collections (no data-level enforcement yet). */
+   Data-level: firestore.rules lets a member read/write a collection only if their level can VIEW an app that uses it (COL_AREAS below,
+   must match canUse() in the rules). "Edit" rights stay app-level (they mean admin settings, not saving data). */
 (function () {
   const { h, icon, esc } = UI;
   const ROLES = ["admin", "manager", "member", "guest"];
@@ -38,6 +39,8 @@
   const KNOWN = { tasks: ["Tasks", "✅"], groups: ["Workgroups", "👥"], chat: ["Chat & Calls", "💬"], feed: ["Feed", "📰"], calendar: ["Calendar", "📅"],
     crm: ["CRM", "💼"], booking: ["Booking", "🗓️"], inventory: ["Inventory", "📦"], company: ["Company & HR", "🏢"], drive: ["Drive", "🗂️"], automation: ["Automation", "⚡"] };
   const SETTINGS = { key: "settings", title: "Workspace settings", icon: "⚙️" };
+  // which apps need each collection (must match canUse() in firestore.rules); collections not listed are shared by every app
+  const COL_AREAS = {"tasks": ["tasks", "groups"], "projects": ["tasks", "groups"], "chat": ["chat", "groups"], "channels": ["chat", "groups"], "feed": ["feed", "groups"], "events": ["calendar", "feed", "company", "groups"], "leads": ["crm", "marketing"], "deals": ["crm", "inventory"], "contacts": ["crm", "marketing", "booking"], "companies": ["crm", "marketing", "inventory"], "products": ["crm", "inventory", "booking"], "quotes": ["crm"], "activities": ["crm"], "history": ["crm"], "items": ["crm"], "forms": ["crm"], "formsubs": ["crm"], "absences": ["company"], "timelog": ["company"], "reports": ["company"], "shifts": ["company"], "meetings": ["company"], "bookings": ["booking"], "inventory": ["inventory"], "rules": ["automation"], "lists": ["automation"], "listitems": ["automation"], "processes": ["automation"], "procitems": ["automation"], "workflows": ["automation"], "wfruns": ["automation"], "dashboards": ["analytics"], "boards": ["boards"], "boardels": ["boards"], "signdocs": ["sign"], "campaigns": ["marketing"], "segments": ["marketing"], "kbspaces": ["kb"], "kbarticles": ["kb"]};
 
   const J = x => JSON.stringify(x);
   const norm = k => String(k || "").trim().toLowerCase();
@@ -138,6 +141,11 @@
     const p = rule(area);
     return lv === "edit" ? p.view.includes(r) && p.edit.includes(r) : p.view.includes(r);
   }
+  // may I load this collection? (the database refuses collections of apps your level can't view)
+  function canCol(col) {
+    const a = COL_AREAS[col];
+    return !a || !shared() || isAdmin() || a.some(x => can(x, "view"));
+  }
   function areas() {
     const names = [...new Set([...Object.keys(Apps.reg), ...Object.keys(KNOWN)])].filter(n => n !== "home");
     return [...names.map(n => ({ key: n, title: Apps.reg[n]?.title || KNOWN[n]?.[0] || n, icon: Apps.reg[n]?.icon || KNOWN[n]?.[1] || "🧩" })), SETTINGS];
@@ -147,6 +155,10 @@
 
   /* ---------- change notifications ---------- */
   Apps.onAccess = new Set();
+  Apps.canCol = canCol;
+  // when access changes, re-open the collections that became allowed or blocked
+  let colSig = "";
+  const colsNow = () => Object.keys(COL_AREAS).filter(canCol).join(",");
   let sig = null, switching = false;
   const signature = () => { const w = ws(); return shared() ? J([w.id, window.Cloud.user.email, w.owner, w.ownerEmail || "", w.pendingOwner || "", w.members || [], w.roles || {}, w.perms || {}]) : "local"; };
   // cloud.js calls this whenever the workspace doc changes; it runs the callbacks only if roles, perms or members really changed
@@ -155,7 +167,8 @@
     Apps.onAccess.forEach(fn => { try { fn(); } catch (e) { console.error(e); } });
   }
   // switching workspaces: the app re-routes right after, so the default callback doesn't need to
-  Apps.onWorkspace.add(() => { switching = true; try { changed(); } finally { switching = false; } });
+  Apps.onWorkspace.add(() => { switching = true; try { changed(); } finally { switching = false; } colSig = colsNow(); });
+  Apps.onAccess.add(() => { const s = colsNow(); if (colSig && s !== colSig && !switching && window.Data) { colSig = s; setTimeout(() => Data.reset(), 0); } else colSig = s; });
   Apps.onAccess.add(() => {
     Apps.renderNav?.();
     if (switching) return;

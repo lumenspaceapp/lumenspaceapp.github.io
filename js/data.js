@@ -20,6 +20,7 @@
   function ensure(col) {
     if (cache[col]) return;
     cache[col] = {};
+    if (cloud() && window.Apps?.canCol && !Apps.canCol(col)) return; // an app your level can't open: the database would refuse it anyway
     if (cloud()) {
       const { fb, ref } = Cloud.fs;
       let q = fb.collection(ref(), col);
@@ -27,7 +28,7 @@
       unsubs[col] = fb.onSnapshot(q, snap => {
         snap.docChanges().forEach(ch => { if (ch.type === "removed") delete cache[col][ch.doc.id]; else cache[col][ch.doc.id] = { id: ch.doc.id, ...ch.doc.data() }; });
         emit(col);
-      }, e => { console.warn(col, e); if (e.code === "permission-denied") UI.toast("No permission for " + col + ". Publish the latest firestore.rules."); });
+      }, e => { console.warn(col, e); if (e.code === "permission-denied" && (!window.Apps?.canCol || Apps.canCol(col))) UI.toast("No permission for " + col + ". Publish the latest firestore.rules."); });
     } else Object.assign(cache[col], local[col] || {});
   }
   function list(col) { ensure(col); return Object.values(cache[col]); }
@@ -123,6 +124,6 @@
     notify(to, text, link, body) { if (!to || to === Data.me().key) return; Data.add("notifications", { to, text, link: link || "", read: false, ...(body ? { body: String(body).slice(0, 300) } : {}) }); },
   };
   const clean = o => JSON.parse(JSON.stringify(o));
-  const err = e => { console.error(e); UI.toast("Couldn't save: " + (e.code || e.message)); };
+  const err = e => { console.error(e); UI.toast(e.code === "permission-denied" ? "You don't have access to save this here. Ask an admin." : "Couldn't save: " + (e.code || e.message)); };
   window.Data = Data;
 })();

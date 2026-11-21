@@ -70,13 +70,46 @@ service cloud.firestore {
       match /pages/{page} {
         allow read, write: if isMember(ws);
       }
-      // business apps (tasks, chat, CRM, …): any member can read and write
+      // app access: a member may read and write a collection only if their level can view an app that uses it
+      // (owner and admins always can; profiles, notifications, settings and files are shared by every app).
+      // perms[area].view lists the levels allowed to view an app; without a saved rule: everyone but guests,
+      // plus guests for Tasks, Chat, Workgroups, Calendar and Drive. Rules saved before the Manager level (no `m`) treat managers as members.
+      // Must match COL_AREAS in js/access.js.
+      function sees(d, r, area) {
+        let p = d.get('perms', {}).get(area, {});
+        let v = p.get('view', null);
+        return v == null
+          ? (r != 'guest' || area in ['tasks', 'chat', 'groups', 'calendar', 'drive'])
+          : (r in v || (r == 'manager' && !p.get('m', false) && 'member' in v));
+      }
+      function canUse(coll) {
+        let d = get(/databases/$(database)/documents/workspaces/$(ws)).data;
+        let r = d.owner == request.auth.uid ? 'owner' : d.get('roles', {}).get(myEmail(), 'member');
+        return r == 'owner' || r == 'admin'
+          || coll in ['people', 'notifications', 'settings', 'files', 'folders']
+          || (coll in ['tasks', 'projects'] && (sees(d, r, 'tasks') || sees(d, r, 'groups')))
+          || (coll in ['chat', 'channels'] && (sees(d, r, 'chat') || sees(d, r, 'groups')))
+          || (coll in ['feed'] && (sees(d, r, 'feed') || sees(d, r, 'groups')))
+          || (coll in ['events'] && (sees(d, r, 'calendar') || sees(d, r, 'feed') || sees(d, r, 'company') || sees(d, r, 'groups')))
+          || (coll in ['leads'] && (sees(d, r, 'crm') || sees(d, r, 'marketing')))
+          || (coll in ['deals'] && (sees(d, r, 'crm') || sees(d, r, 'inventory')))
+          || (coll in ['contacts'] && (sees(d, r, 'crm') || sees(d, r, 'marketing') || sees(d, r, 'booking')))
+          || (coll in ['companies'] && (sees(d, r, 'crm') || sees(d, r, 'marketing') || sees(d, r, 'inventory')))
+          || (coll in ['products'] && (sees(d, r, 'crm') || sees(d, r, 'inventory') || sees(d, r, 'booking')))
+          || (coll in ['quotes', 'activities', 'history', 'items', 'forms', 'formsubs'] && (sees(d, r, 'crm')))
+          || (coll in ['absences', 'timelog', 'reports', 'shifts', 'meetings'] && (sees(d, r, 'company')))
+          || (coll in ['bookings'] && (sees(d, r, 'booking')))
+          || (coll in ['inventory'] && (sees(d, r, 'inventory')))
+          || (coll in ['rules', 'lists', 'listitems', 'processes', 'procitems', 'workflows', 'wfruns'] && (sees(d, r, 'automation')))
+          || (coll in ['dashboards'] && (sees(d, r, 'analytics')))
+          || (coll in ['boards', 'boardels'] && (sees(d, r, 'boards')))
+          || (coll in ['signdocs'] && (sees(d, r, 'sign')))
+          || (coll in ['campaigns', 'segments'] && (sees(d, r, 'marketing')))
+          || (coll in ['kbspaces', 'kbarticles'] && (sees(d, r, 'kb')));
+      }
+      // business apps (tasks, chat, CRM, …): members whose level can view the app
       match /{coll}/{docId} {
-        allow read, write: if isMember(ws) && coll in ['tasks', 'projects', 'chat', 'channels', 'feed', 'events', 'leads', 'deals',
-          'contacts', 'companies', 'people', 'absences', 'timelog', 'files', 'folders', 'rules', 'notifications',
-          'products', 'quotes', 'activities', 'history', 'items', 'settings', 'bookings', 'inventory', 'forms', 'formsubs',
-          'reports', 'shifts', 'meetings', 'lists', 'listitems', 'processes', 'procitems', 'workflows', 'wfruns',
-          'dashboards', 'boards', 'boardels', 'signdocs', 'campaigns', 'segments', 'kbspaces', 'kbarticles'];
+        allow read, write: if isMember(ws) && coll in ['people', 'notifications', 'settings', 'files', 'folders', 'tasks', 'projects', 'chat', 'channels', 'feed', 'events', 'leads', 'deals', 'contacts', 'companies', 'products', 'quotes', 'activities', 'history', 'items', 'forms', 'formsubs', 'absences', 'timelog', 'reports', 'shifts', 'meetings', 'bookings', 'inventory', 'rules', 'lists', 'listitems', 'processes', 'procitems', 'workflows', 'wfruns', 'dashboards', 'boards', 'boardels', 'signdocs', 'campaigns', 'segments', 'kbspaces', 'kbarticles'] && canUse(coll);
       }
       // CRM web forms: anyone with the link can read a published form...
       match /forms/{formId} {
